@@ -1,0 +1,80 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::content})}">
+<th:block id="content">
+    <h2 th:text="${service == null ? '创建服务' : '编辑服务'}"></h2>
+    <form id="serviceForm" class="mt-4">
+        <input type="hidden" name="id" th:value="${service?.id}">
+        <div class="mb-3">
+            <label class="form-label">服务名称</label>
+            <input type="text" class="form-control" name="name" th:value="${service?.name}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">暴露端口</label>
+            <input type="number" class="form-control" name="port" th:value="${service?.port}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Dockerfile</label>
+            <textarea class="form-control" name="dockerfile" rows="10" th:text="${service?.dockerfile}"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">docker-compose.yml</label>
+            <textarea class="form-control" name="dockerCompose" rows="10" th:text="${service?.dockerCompose}"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保存</button>
+        <button type="button" class="btn btn-secondary" onclick="history.back()">取消</button>
+    </form>
+
+    <hr>
+    <h4>上传产物</h4>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label class="form-label">上传 JAR 文件</label>
+                <input type="file" class="form-control" id="jarFile">
+                <button class="btn btn-sm btn-primary mt-2" onclick="uploadJar()">上传</button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label class="form-label">上传前端 dist (zip)</label>
+                <input type="file" class="form-control" id="distFile">
+                <button class="btn btn-sm btn-primary mt-2" onclick="uploadDist()">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.getElementById('serviceForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        const data = {name: form.get('name'), port: form.get('port'), dockerfile: form.get('dockerfile'), dockerCompose: form.get('dockerCompose')};
+        const id = form.get('id');
+        const url = id ? `/api/services/${id}` : '/api/services/create';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {method, headers: {'Content-Type': 'application/json', 'Authorization': localStorage.getItem('token')}, body: JSON.stringify(data)}).then(r => r.json());
+        if (res.code === 200) { alert(res.msg); location.href = '/services'; }
+        else { alert(res.msg); }
+    };
+
+    async function uploadJar() {
+        const file = document.getElementById('jarFile').files[0];
+        if (!file) return;
+        const serviceId = document.querySelector('[name=id]').value || 1;
+        const form = new FormData();
+        form.append('file', file);
+        form.append('type', 'jar');
+        const res = await fetch(`/api/deploy/upload/${serviceId}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}, body: form}).then(r => r.json());
+        alert(res.msg);
+    }
+
+    async function uploadDist() {
+        const file = document.getElementById('distFile').files[0];
+        if (!file) return;
+        const serviceId = document.querySelector('[name=id]').value || 1;
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/deploy/upload-dist/${serviceId}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}, body: form}).then(r => r.json());
+        alert(res.msg);
+    }
+    </script>
+</th:block>

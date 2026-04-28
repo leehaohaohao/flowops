@@ -1,0 +1,48 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::content})}">
+<th:block id="content">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>服务管理</h2>
+        <button class="btn btn-primary" onclick="location.href='/services/create'">创建服务</button>
+    </div>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>服务名</th>
+                <th>端口</th>
+                <th>状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="serviceTable"></tbody>
+    </table>
+
+    <script>
+    async function loadServices() {
+        const res = await fetch('/api/services/list', {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        if (res.code === 200) {
+            document.getElementById('serviceTable').innerHTML = res.data.map(s => `
+                <tr>
+                    <td>${s.id}</td>
+                    <td>${s.name}</td>
+                    <td>${s.port}</td>
+                    <td><span class="badge bg-${s.status === 'running' ? 'success' : 'secondary'}">${s.status}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="location.href='/services/${s.id}'">编辑</button>
+                        <button class="btn btn-sm btn-success" onclick="deploy(${s.id})">部署</button>
+                        <button class="btn btn-sm btn-danger" onclick="stop(${s.id})">停止</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+    async function deploy(id) {
+        await fetch(`/api/deploy/start/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {alert(r.msg); loadServices();});
+    }
+    async function stop(id) {
+        await fetch(`/api/deploy/stop/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {alert(r.msg); loadServices();});
+    }
+    loadServices();
+    </script>
+</th:block>

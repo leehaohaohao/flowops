@@ -1,0 +1,31 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::content})}">
+<th:block id="content">
+    <h2>仪表盘</h2>
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>服务总数</h5>
+                    <h2 id="totalServices">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>运行中</h5>
+                    <h2 id="runningServices">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>部署次数</h5>
+                    <h2 id="totalDeploys">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+</th:block>
