@@ -1,0 +1,8 @@
+target/
+.git/
+.idea/
+.worktrees/
+docs/
+*.md
+.gitignore
+.dockerignore
