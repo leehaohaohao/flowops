@@ -11,13 +11,11 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 注册 Sa-Token 拦截器
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/login",
-                        "/auth/login",
-                        "/auth/captcha",
+                        "/auth/**",
                         "/error",
                         "/js/**",
                         "/css/**",
