@@ -125,46 +125,55 @@ git add pom.xml && git commit -m "feat: 添加 Sa-Token, MyBatis-Plus, Docker SD
 ### Task 2: 配置文件
 
 **Files:**
-- Modify: `src/main/resources/application.properties`
+- Modify: `src/main/resources/application.yml`
 
 - [ ] **Step 1: 配置数据库和 Sa-Token**
 
-```properties
-# 服务端口
-server.port=8080
+```yaml
+# 服务配置
+server:
+  port: 8080
 
 # 数据库配置
-spring.datasource.url=jdbc:mysql://localhost:3306/flowops?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-spring.datasource.username=root
-spring.datasource.password=root
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/flowops?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus 配置
-mybatis-plus.mapper-locations=classpath:mapper/*.xml
-mybatis-plus.type-aliases-package=com.nexa.flowops.entity
-mybatis-plus.configuration.map-underscore-to-camel-case=true
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.nexa.flowops.entity
+  configuration:
+    map-underscore-to-camel-case: true
 
 # Sa-Token 配置
-sa-token.token-name=satoken
-sa-token.timeout=86400
-sa-token.active-timeout=-1
-sa-token.is-concurrent=true
-sa-token.is-share=true
-sa-token.token-style=uuid
-sa-token.is-log=false
+sa-token:
+  token-name: satoken
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: false
 
 # Docker 配置
-docker.host=tcp://localhost:2375
-docker.registry.url=https://index.docker.io/v1/
+docker:
+  host: tcp://localhost:2375
+  registry-url: https://index.docker.io/v1/
 
 # 产物存储目录
-app.storage.path=/data/flowops/services
+app:
+  storage:
+    path: /data/flowops/services
 ```
 
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/main/resources/application.properties && git commit -m "feat: 添加数据库和 Sa-Token 配置"
+git add src/main/resources/application.yml && git commit -m "feat: 添加数据库和 Sa-Token 配置"
 ```
 
 ---
