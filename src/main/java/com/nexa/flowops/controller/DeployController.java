@@ -1,6 +1,6 @@
 package com.nexa.flowops.controller;
 
-import com.nexa.flowops.service.DeployService;
+import com.nexa.flowops.service.DeployExecutorService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -12,9 +12,9 @@ import java.util.UUID;
 @RequestMapping("/api/deploy")
 public class DeployController {
 
-    private final DeployService deployService;
+    private final DeployExecutorService deployService;
 
-    public DeployController(DeployService deployService) {
+    public DeployController(DeployExecutorService deployService) {
         this.deployService = deployService;
     }
 

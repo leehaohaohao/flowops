@@ -17,14 +17,14 @@ import java.util.UUID;
 import java.util.zip.ZipInputStream;
 
 @Service
-public class DeployService {
+public class DeployExecutorService {
 
     private final DeployServiceMapper serviceMapper;
     private final DeployRecordMapper recordMapper;
     private final DockerUtil dockerUtil;
     private final String storagePath = "/data/flowops/services";
 
-    public DeployService(DeployServiceMapper serviceMapper, DeployRecordMapper recordMapper, DockerUtil dockerUtil) {
+    public DeployExecutorService(DeployServiceMapper serviceMapper, DeployRecordMapper recordMapper, DockerUtil dockerUtil) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.dockerUtil = dockerUtil;
