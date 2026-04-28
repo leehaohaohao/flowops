@@ -1,0 +1,57 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::content})}">
+<th:block th:fragment="content">
+    <h2>日志查看</h2>
+    <div class="mt-4">
+        <h5>部署日志列表</h5>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>日志文件</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="logTable"></tbody>
+        </table>
+    </div>
+
+    <hr>
+
+    <div>
+        <h5>实时日志</h5>
+        <pre id="logContent" style="background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:4px;max-height:500px;overflow:auto;font-size:13px;">
+点击上方日志文件查看内容
+        </pre>
+    </div>
+
+    <script>
+    async function loadLogs() {
+        const res = await fetch('/api/logs/list', {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        if (res.code === 200 && res.data.length > 0) {
+            document.getElementById('logTable').innerHTML = res.data.map(f => `
+                <tr>
+                    <td>${f}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="viewLog('${f}')">查看</button>
+                        <a class="btn btn-sm btn-secondary" href="/api/logs/content?filename=${f}" download>下载</a>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            document.getElementById('logTable').innerHTML = '<tr><td colspan="2" class="text-muted">暂无日志</td></tr>';
+        }
+    }
+
+    async function viewLog(filename) {
+        const res = await fetch(`/api/logs/content?filename=${filename}&limit=500`, {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        if (res.code === 200) {
+            document.getElementById('logContent').textContent = res.data;
+        } else {
+            document.getElementById('logContent').textContent = res.msg || '加载失败';
+        }
+    }
+
+    loadLogs();
+    </script>
+</th:block>
+</html>
