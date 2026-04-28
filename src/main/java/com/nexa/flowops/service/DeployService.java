@@ -123,17 +123,16 @@ public class DeployService {
     }
 
     private String generateDefaultCompose(DeployService service) {
-        return """
-                version: '3'
-                services:
-                  app:
-                    build: .
-                    ports:
-                      - "%d:8080"
-                    volumes:
-                      - ./app.jar:/app/app.jar
-                    restart: unless-stopped
-                """.formatted(service.getPort());
+        String port = String.valueOf(service.getPort());
+        return "version: '3'\n" +
+                "services:\n" +
+                "  app:\n" +
+                "    build: .\n" +
+                "    ports:\n" +
+                "      - \"" + port + ":8080\"\n" +
+                "    volumes:\n" +
+                "      - ./app.jar:/app/app.jar\n" +
+                "    restart: unless-stopped\n";
     }
 
     public Map<String, Object> stopContainer(Long serviceId) {
