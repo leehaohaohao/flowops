@@ -67,13 +67,6 @@
 			<version>3.5.6</version>
 		</dependency>
 
-		<!-- Docker SDK -->
-		<dependency>
-			<groupId>com.github.docker-java</groupId>
-			<artifactId>docker-java</artifactId>
-			<version>3.3.6</version>
-		</dependency>
-
 		<!-- WebSocket -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
