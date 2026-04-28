@@ -97,7 +97,7 @@ public class DeployExecutorService {
             Process process = pb.start();
 
             // 记录日志
-            Files.createDirectories(new File(logPath).getParentFile());
+            Files.createDirectories(new File(logPath).getParentFile().toPath());
             try (InputStream is = process.getInputStream();
                  OutputStream os = new FileOutputStream(logPath)) {
                 is.transferTo(os);
