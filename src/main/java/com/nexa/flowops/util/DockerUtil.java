@@ -26,7 +26,7 @@ public class DockerUtil {
         }
     }
 
-    public String getContainerLog(String containerName, long tail) {
+    public String getContainerLog(String containerName, Integer tail) {
         try {
             return dockerClient.logContainerCmd(containerName)
                     .withTail(tail)
