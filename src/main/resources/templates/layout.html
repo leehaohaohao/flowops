@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(content)">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -22,11 +22,12 @@
                 <li class="nav-item"><a class="nav-link" href="/dashboard">仪表盘</a></li>
                 <li class="nav-item"><a class="nav-link" href="/services">服务管理</a></li>
                 <li class="nav-item"><a class="nav-link" href="/logs">日志查看</a></li>
-                <li class="nav-item"><a class="nav-link" href="/users" th:if="${session.role == 'admin'}">用户管理</a></li>
+                <li class="nav-item"><a class="nav-link" href="/users">用户管理</a></li>
+                <li class="nav-item"><a class="nav-link" href="javascript:logout()">退出登录</a></li>
             </ul>
         </div>
         <div class="col-md-10 p-4">
-            <div th:replace="~{::content}"></div>
+            <th:block th:replace="${content}"/>
         </div>
     </div>
 </div>

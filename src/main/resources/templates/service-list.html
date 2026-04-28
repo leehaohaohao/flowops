@@ -1,6 +1,6 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(~{::content})}">
-<th:block id="content">
+<th:block th:fragment="content">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>服务管理</h2>
         <button class="btn btn-primary" onclick="location.href='/services/create'">创建服务</button>

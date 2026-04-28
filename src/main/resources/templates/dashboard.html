@@ -1,6 +1,6 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(~{::content})}">
-<th:block id="content">
+<th:block th:fragment="content">
     <h2>仪表盘</h2>
     <div class="row mt-4">
         <div class="col-md-4">
