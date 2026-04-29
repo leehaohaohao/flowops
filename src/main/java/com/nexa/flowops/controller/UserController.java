@@ -1,9 +1,12 @@
 package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
+import com.nexa.flowops.common.Result;
+import com.nexa.flowops.entity.SysUser;
 import com.nexa.flowops.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -18,19 +21,19 @@ public class UserController {
     }
 
     @GetMapping("/list")
-    public Map<String, Object> list() {
-        return Map.of("code", 200, "data", userService.list());
+    public Result<List<SysUser>> list() {
+        return Result.ok(userService.list());
     }
 
     @PostMapping("/create")
-    public Map<String, Object> create(@RequestBody Map<String, String> params) {
+    public Result<Void> create(@RequestBody Map<String, String> params) {
         userService.createUser(params.get("username"), params.get("password"), params.get("role"));
-        return Map.of("code", 200, "msg", "创建成功");
+        return Result.ok("创建成功");
     }
 
     @DeleteMapping("/{id}")
-    public Map<String, Object> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id) {
         userService.deleteUser(id);
-        return Map.of("code", 200, "msg", "删除成功");
+        return Result.ok("删除成功");
     }
 }

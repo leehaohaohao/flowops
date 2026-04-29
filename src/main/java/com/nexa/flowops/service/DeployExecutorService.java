@@ -1,5 +1,6 @@
 package com.nexa.flowops.service;
 
+import com.nexa.flowops.common.Result;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployRecordMapper;
@@ -66,7 +67,7 @@ public class DeployExecutorService {
         }
     }
 
-    public Map<String, Object> deploy(Long serviceId) {
+    public Result<Void> deploy(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         DeployRecord record = new DeployRecord();
         record.setServiceId(serviceId);
@@ -114,11 +115,11 @@ public class DeployExecutorService {
             serviceMapper.updateById(service);
             recordMapper.insert(record);
 
-            return Map.of("code", 200, "msg", exitCode == 0 ? "部署成功" : "部署失败");
+            return exitCode == 0 ? Result.ok("部署成功") : Result.fail("部署失败");
         } catch (Exception e) {
             record.setStatus("failed");
             recordMapper.insert(record);
-            return Map.of("code", 500, "msg", "部署异常: " + e.getMessage());
+            return Result.fail("部署异常: " + e.getMessage());
         }
     }
 
@@ -135,7 +136,7 @@ public class DeployExecutorService {
                 "    restart: unless-stopped\n";
     }
 
-    public Map<String, Object> stopContainer(Long serviceId) {
+    public Result<Void> stopContainer(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         try {
             ProcessBuilder pb = new ProcessBuilder(
@@ -145,15 +146,15 @@ public class DeployExecutorService {
             pb.start().waitFor();
             service.setStatus("stopped");
             serviceMapper.updateById(service);
-            return Map.of("code", 200, "msg", "停止成功");
+            return Result.ok("停止成功");
         } catch (Exception e) {
-            return Map.of("code", 500, "msg", "停止失败: " + e.getMessage());
+            return Result.fail("停止失败: " + e.getMessage());
         }
     }
 
-    public Map<String, Object> getContainerStatus(Long serviceId) {
+    public Result<Map<String, Object>> getContainerStatus(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         boolean running = dockerUtil.isContainerRunning(service.getName());
-        return Map.of("code", 200, "data", Map.of("running", running, "status", running ? "running" : "stopped"));
+        return Result.ok(Map.of("running", running, "status", running ? "running" : "stopped"));
     }
 }

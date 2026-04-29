@@ -1,12 +1,12 @@
 package com.nexa.flowops.controller;
 
+import com.nexa.flowops.common.Result;
 import com.nexa.flowops.service.DeployExecutorService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/deploy")
@@ -19,7 +19,7 @@ public class DeployController {
     }
 
     @PostMapping("/upload/{serviceId}")
-    public Map<String, Object> upload(
+    public Result<String> upload(
             @PathVariable Long serviceId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "type", defaultValue = "jar") String type) {
@@ -28,38 +28,37 @@ public class DeployController {
         try {
             File targetFile = new File(uploadPath, filename);
             file.transferTo(targetFile);
-            return Map.of("code", 200, "msg", "上传成功", "filename", filename);
+            return Result.ok("上传成功", filename);
         } catch (Exception e) {
-            return Map.of("code", 500, "msg", "上传失败: " + e.getMessage());
+            return Result.fail("上传失败: " + e.getMessage());
         }
     }
 
     @PostMapping("/upload-dist/{serviceId}")
-    public Map<String, Object> uploadDist(
+    public Result<Void> uploadDist(
             @PathVariable Long serviceId,
             @RequestParam("file") MultipartFile file) {
         String uploadPath = deployService.getUploadPath(serviceId, "dist");
         try {
-            // 解压 dist 到目标目录
             deployService.extractDist(file, uploadPath);
-            return Map.of("code", 200, "msg", "前端文件上传成功");
+            return Result.ok("前端文件上传成功");
         } catch (Exception e) {
-            return Map.of("code", 500, "msg", "上传失败: " + e.getMessage());
+            return Result.fail("上传失败: " + e.getMessage());
         }
     }
 
     @PostMapping("/start/{serviceId}")
-    public Map<String, Object> start(@PathVariable Long serviceId) {
+    public Result<Void> start(@PathVariable Long serviceId) {
         return deployService.deploy(serviceId);
     }
 
     @PostMapping("/stop/{serviceId}")
-    public Map<String, Object> stop(@PathVariable Long serviceId) {
+    public Result<Void> stop(@PathVariable Long serviceId) {
         return deployService.stopContainer(serviceId);
     }
 
     @GetMapping("/status/{serviceId}")
-    public Map<String, Object> status(@PathVariable Long serviceId) {
+    public Result<Map<String, Object>> status(@PathVariable Long serviceId) {
         return deployService.getContainerStatus(serviceId);
     }
 }
