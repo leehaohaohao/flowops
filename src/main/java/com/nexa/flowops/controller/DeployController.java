@@ -23,9 +23,10 @@ public class DeployController {
             @PathVariable Long serviceId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "type", defaultValue = "jar") String type) {
-        String filename = file.getOriginalFilename();
         String uploadPath = deployService.getUploadPath(serviceId, type);
         try {
+            // JAR 类型统一重命名为 app.jar，与默认 docker-compose 模板匹配
+            String filename = "jar".equals(type) ? "app.jar" : file.getOriginalFilename();
             File targetFile = new File(uploadPath, filename);
             file.transferTo(targetFile);
             return Result.ok("上传成功", filename);
