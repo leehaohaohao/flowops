@@ -89,13 +89,13 @@ public class DeployExecutorService {
 
             // 执行部署
             ProcessBuilder pb = new ProcessBuilder(
-                    "docker-compose", "-f", composeFile.getAbsolutePath(), "down"
+                    "docker", "compose", "-f", composeFile.getAbsolutePath(), "down"
             );
             pb.directory(new File(service.getVolumeDir()));
             pb.start().waitFor();
 
             pb = new ProcessBuilder(
-                    "docker-compose", "-f", composeFile.getAbsolutePath(), "up", "-d", "--build"
+                    "docker", "compose", "-f", composeFile.getAbsolutePath(), "up", "-d", "--build"
             );
             pb.directory(new File(service.getVolumeDir()));
             Process process = pb.start();
@@ -143,7 +143,7 @@ public class DeployExecutorService {
         DeployService service = serviceMapper.selectById(serviceId);
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    "docker-compose", "-f", service.getVolumeDir() + "/docker-compose.yml", "down"
+                    "docker", "compose", "-f", service.getVolumeDir() + "/docker-compose.yml", "down"
             );
             pb.directory(new File(service.getVolumeDir()));
             pb.start().waitFor();
