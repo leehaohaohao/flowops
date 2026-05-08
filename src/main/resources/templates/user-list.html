@@ -77,10 +77,10 @@
             body: JSON.stringify({username: form.get('username'), password: form.get('password'), role: form.get('role')})
         }).then(r => r.json());
         if (res.code === 200) {
-            alert(res.msg);
+            showToast(res.msg, 'success');
             bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
             loadUsers();
-        } else { alert(res.msg); }
+        } else { showToast(res.msg || '创建失败', 'danger'); }
     };
 
     function resetForm() { document.getElementById('userForm').reset(); }
@@ -88,7 +88,7 @@
     async function deleteUser(id) {
         if (!confirm('确认删除该用户？')) return;
         const res = await fetch(`/api/users/${id}`, {method: 'DELETE', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
-        alert(res.msg);
+        showToast(res.msg, res.code === 200 ? 'success' : 'danger');
         if (res.code === 200) loadUsers();
     }
 

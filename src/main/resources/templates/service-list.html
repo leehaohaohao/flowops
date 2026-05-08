@@ -38,10 +38,10 @@
         }
     }
     async function deploy(id) {
-        await fetch(`/api/deploy/start/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {alert(r.msg); loadServices();});
+        await fetch(`/api/deploy/start/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {showToast(r.msg, r.code === 200 ? 'success' : 'danger'); loadServices();});
     }
     async function stop(id) {
-        await fetch(`/api/deploy/stop/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {alert(r.msg); loadServices();});
+        await fetch(`/api/deploy/stop/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {showToast(r.msg, r.code === 200 ? 'success' : 'danger'); loadServices();});
     }
     loadServices();
     </script>

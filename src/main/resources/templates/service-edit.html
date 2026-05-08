@@ -52,8 +52,8 @@
         const url = id ? `/api/services/${id}` : '/api/services/create';
         const method = id ? 'PUT' : 'POST';
         const res = await fetch(url, {method, headers: {'Content-Type': 'application/json', 'Authorization': localStorage.getItem('token')}, body: JSON.stringify(data)}).then(r => r.json());
-        if (res.code === 200) { alert(res.msg); location.href = '/services'; }
-        else { alert(res.msg); }
+        if (res.code === 200) { showToast(res.msg, 'success'); setTimeout(() => location.href = '/services', 1000); }
+        else { showToast(res.msg || '保存失败', 'danger'); }
     };
 
     async function uploadJar() {
@@ -64,7 +64,7 @@
         form.append('file', file);
         form.append('type', 'jar');
         const res = await fetch(`/api/deploy/upload/${serviceId}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}, body: form}).then(r => r.json());
-        alert(res.msg);
+        showToast(res.msg, res.code === 200 ? 'success' : 'danger');
     }
 
     async function uploadDist() {
@@ -74,7 +74,7 @@
         const form = new FormData();
         form.append('file', file);
         const res = await fetch(`/api/deploy/upload-dist/${serviceId}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}, body: form}).then(r => r.json());
-        alert(res.msg);
+        showToast(res.msg, res.code === 200 ? 'success' : 'danger');
     }
     </script>
 </th:block>
