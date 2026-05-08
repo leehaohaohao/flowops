@@ -37,13 +37,9 @@ fi
 # 确保 APP 目录存在
 mkdir -p "$APP_DIR"
 
-# 移动 JAR 到 APP 目录（如果不在该目录下）
-if [ "$(dirname "$(readlink -f "$JAR_FILE")")" != "$APP_DIR" ]; then
-    echo "[0/4] 复制 JAR 到 $APP_DIR ..."
-    cp "$JAR_FILE" "$APP_DIR/flowops.jar"
-else
-    echo "[0/4] JAR 已在 $APP_DIR 下"
-fi
+# 复制 JAR 到 APP 目录并重命名为 flowops.jar（Dockerfile 期望的文件名）
+echo "[0/4] 准备 JAR 文件..."
+cp "$JAR_FILE" "$APP_DIR/flowops.jar"
 
 # 创建数据目录
 mkdir -p "$DATA_DIR/services" "$DATA_DIR/logs"
