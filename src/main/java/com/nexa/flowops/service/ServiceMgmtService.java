@@ -29,7 +29,7 @@ public class ServiceMgmtService {
     public void createService(Map<String, Object> params) {
         DeployService service = new DeployService();
         service.setName((String) params.get("name"));
-        service.setPort((Integer) params.get("port"));
+        service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
         service.setVolumeDir(storagePath + "/" + service.getName());
         service.setDockerfile((String) params.get("dockerfile"));
         service.setDockerCompose((String) params.get("dockerCompose"));
@@ -49,7 +49,7 @@ public class ServiceMgmtService {
             service.setName((String) params.get("name"));
         }
         if (params.containsKey("port")) {
-            service.setPort((Integer) params.get("port"));
+            service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
         }
         if (params.containsKey("dockerfile")) {
             service.setDockerfile((String) params.get("dockerfile"));
