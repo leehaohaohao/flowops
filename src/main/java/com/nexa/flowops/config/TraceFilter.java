@@ -3,6 +3,8 @@ package com.nexa.flowops.config;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -14,6 +16,8 @@ import java.util.UUID;
 
 @Component
 public class TraceFilter implements Filter {
+
+    private static final Logger log = LoggerFactory.getLogger(TraceFilter.class);
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -41,7 +45,7 @@ public class TraceFilter implements Filter {
         String url = query != null ? uri + "?" + query : uri;
 
         // 请求日志
-        System.out.printf("[%s] --> %s %s%n", traceId, method, url);
+        log.info("[{}] --> {} {}", traceId, method, url);
 
         try {
             chain.doFilter(reqWrapper, respWrapper);
@@ -51,13 +55,17 @@ public class TraceFilter implements Filter {
 
             // 响应日志
             String statusText = status >= 400 ? "FAIL" : "OK";
-            System.out.printf("[%s] <-- %s %s %d %dms%n", traceId, statusText, method, status, elapsed);
+            if (status >= 400) {
+                log.error("[{}] <-- {} {} {} {}ms", traceId, statusText, method, status, elapsed);
+            } else {
+                log.info("[{}] <-- {} {} {} {}ms", traceId, statusText, method, status, elapsed);
+            }
 
             // 输出响应 body（错误时）
             if (status >= 400) {
                 byte[] body = respWrapper.getContentAsByteArray();
                 if (body.length > 0) {
-                    System.out.printf("[%s] body: %s%n", traceId,
+                    log.error("[{}] body: {}", traceId,
                             new String(body, StandardCharsets.UTF_8).substring(0, Math.min(body.length, 500)));
                 }
             }
