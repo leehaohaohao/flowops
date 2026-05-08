@@ -5,7 +5,9 @@
       "Bash(./mvnw compile:*)",
       "Bash(./mvnw test:*)",
       "Bash(java:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
