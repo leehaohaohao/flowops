@@ -4,6 +4,10 @@
 spring:
   profiles:
     active: prod   # 默认生产环境，启动时可用 --spring.profiles.active=dev 切换
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
 
 # 服务端口
 server:
