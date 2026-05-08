@@ -28,6 +28,15 @@ fi
 
 JAR_FILE="$1"
 
+# 检查 JAR 文件是否存在
+if [ ! -f "$JAR_FILE" ]; then
+    echo "[ERROR] JAR 文件不存在: $JAR_FILE"
+    exit 1
+fi
+
+# 获取 JAR 绝对路径（解决相对路径/目录不同的问题）
+JAR_FILE="$(cd "$(dirname "$JAR_FILE")" && pwd)/$(basename "$JAR_FILE")"
+
 # 检查 Docker
 if ! command -v docker &>/dev/null; then
     echo "[ERROR] 未检测到 Docker，请先安装 Docker"
@@ -38,8 +47,14 @@ fi
 mkdir -p "$APP_DIR"
 
 # 复制 JAR 到 APP 目录并重命名为 flowops.jar（Dockerfile 期望的文件名）
-echo "[0/4] 准备 JAR 文件..."
-cp "$JAR_FILE" "$APP_DIR/flowops.jar"
+echo "[0/4] 复制 JAR: $(basename "$JAR_FILE") -> $APP_DIR/flowops.jar"
+cp -f "$JAR_FILE" "$APP_DIR/flowops.jar"
+
+# 验证复制成功
+if [ ! -f "$APP_DIR/flowops.jar" ]; then
+    echo "[ERROR] JAR 复制失败"
+    exit 1
+fi
 
 # 创建数据目录
 mkdir -p "$DATA_DIR/services" "$DATA_DIR/logs"
