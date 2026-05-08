@@ -5,7 +5,7 @@ COPY .mvn .mvn
 COPY src src
 RUN chmod +x mvnw && ./mvnw package -DskipTests -q
 
-FROM eclipse-temurin:17-jre
+FROM openjdk:17-jdk-slim
 WORKDIR /app
 RUN mkdir -p /data/flowops/services /data/flowops/logs
 
