@@ -33,6 +33,9 @@ public class DeployExecutorService {
 
     public String getUploadPath(Long serviceId, String type) {
         DeployService service = serviceMapper.selectById(serviceId);
+        if (service == null) {
+            throw new RuntimeException("服务不存在: " + serviceId);
+        }
         String path = service.getVolumeDir();
         if ("dist".equals(type)) {
             path = path + "/dist";

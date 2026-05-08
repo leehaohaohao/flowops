@@ -1,6 +1,7 @@
 package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.nexa.flowops.service.ServiceMgmtService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +9,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @Controller
 public class PageController {
+
+    private final ServiceMgmtService serviceMgmtService;
+
+    public PageController(ServiceMgmtService serviceMgmtService) {
+        this.serviceMgmtService = serviceMgmtService;
+    }
 
     @GetMapping("/login")
     public String login() {
@@ -32,7 +39,7 @@ public class PageController {
 
     @GetMapping("/services/{id}")
     public String serviceEdit(@PathVariable Long id, Model model) {
-        model.addAttribute("service", null); // 实际应查询
+        model.addAttribute("service", serviceMgmtService.getById(id));
         return "service-edit";
     }
 
