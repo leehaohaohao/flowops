@@ -9,6 +9,9 @@ import com.nexa.flowops.util.DockerUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -19,6 +22,8 @@ import java.util.zip.ZipInputStream;
 
 @Service
 public class DeployExecutorService {
+
+    private static final Logger log = LoggerFactory.getLogger(DeployExecutorService.class);
 
     private final DeployServiceMapper serviceMapper;
     private final DeployRecordMapper recordMapper;
@@ -87,43 +92,65 @@ public class DeployExecutorService {
             File composeFile = new File(service.getVolumeDir(), "docker-compose.yml");
             Files.writeString(composeFile.toPath(), composeContent);
 
-            // 执行部署
-            ProcessBuilder pb = new ProcessBuilder(
-                    "docker", "compose", "-f", composeFile.getAbsolutePath(), "down"
+            String composePath = composeFile.getAbsolutePath();
+
+            // down
+            log.info("[{}] 执行 docker compose down", service.getName());
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "-f", composePath, "down"
             );
             pb.directory(new File(service.getVolumeDir()));
-            pb.start().waitFor();
+            Process downProc = pb.start();
+            String downOutput = readProcessOutput(downProc);
+            int downCode = downProc.waitFor();
+            if (downCode != 0) {
+                log.warn("[{}] docker compose down 退出码={}，输出:\n{}", service.getName(), downCode, downOutput);
+            }
 
-            pb = new ProcessBuilder(
-                    "docker", "compose", "-f", composeFile.getAbsolutePath(), "up", "-d", "--build"
+            // up -d --build
+            log.info("[{}] 执行 docker compose up -d --build", service.getName());
+            pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "-f", composePath, "up", "-d", "--build"
             );
             pb.directory(new File(service.getVolumeDir()));
             Process process = pb.start();
 
-            // 记录日志
+            // 同时写入部署日志文件
+            String output = readProcessOutput(process);
             Files.createDirectories(new File(logPath).getParentFile().toPath());
-            try (InputStream is = process.getInputStream();
-                 OutputStream os = new FileOutputStream(logPath)) {
-                is.transferTo(os);
-            }
+            Files.writeString(new File(logPath).toPath(), output);
 
             int exitCode = process.waitFor();
             if (exitCode == 0) {
+                log.info("[{}] 部署成功", service.getName());
                 record.setStatus("success");
                 service.setStatus("running");
             } else {
+                log.error("[{}] 部署失败，退出码={}，输出:\n{}", service.getName(), exitCode, output);
                 record.setStatus("failed");
                 service.setStatus("stopped");
             }
             serviceMapper.updateById(service);
             recordMapper.insert(record);
 
-            return exitCode == 0 ? Result.ok("部署成功") : Result.fail("部署失败");
+            return exitCode == 0 ? Result.ok("部署成功") : Result.fail("部署失败，退出码=" + exitCode);
         } catch (Exception e) {
+            log.error("[{}] 部署异常", service.getName(), e);
             record.setStatus("failed");
             recordMapper.insert(record);
             return Result.fail("部署异常: " + e.getMessage());
         }
+    }
+
+    private String readProcessOutput(Process process) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+        }
+        return sb.toString();
     }
 
     private String generateDefaultCompose(DeployService service) {
@@ -142,15 +169,23 @@ public class DeployExecutorService {
     public Result<Void> stopContainer(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    "docker", "compose", "-f", service.getVolumeDir() + "/docker-compose.yml", "down"
+            String composePath = service.getVolumeDir() + "/docker-compose.yml";
+            log.info("[{}] 执行 docker compose down", service.getName());
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "-f", composePath, "down"
             );
             pb.directory(new File(service.getVolumeDir()));
-            pb.start().waitFor();
+            Process process = pb.start();
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                log.warn("[{}] docker compose down 退出码={}，输出:\n{}", service.getName(), exitCode, output);
+            }
             service.setStatus("stopped");
             serviceMapper.updateById(service);
             return Result.ok("停止成功");
         } catch (Exception e) {
+            log.error("[{}] 停止失败", service.getName(), e);
             return Result.fail("停止失败: " + e.getMessage());
         }
     }
