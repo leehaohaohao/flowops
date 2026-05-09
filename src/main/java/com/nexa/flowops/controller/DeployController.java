@@ -58,6 +58,16 @@ public class DeployController {
         return deployService.stopContainer(serviceId);
     }
 
+    @PostMapping("/restart/{serviceId}")
+    public Result<Void> restart(@PathVariable Long serviceId) {
+        return deployService.restartContainer(serviceId);
+    }
+
+    @PostMapping("/remove/{serviceId}")
+    public Result<Void> remove(@PathVariable Long serviceId) {
+        return deployService.removeContainer(serviceId);
+    }
+
     @GetMapping("/status/{serviceId}")
     public Result<Map<String, Object>> status(@PathVariable Long serviceId) {
         return deployService.getContainerStatus(serviceId);

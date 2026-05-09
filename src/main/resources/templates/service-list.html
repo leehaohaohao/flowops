@@ -31,7 +31,9 @@
                     <td>
                         <button class="btn btn-sm btn-info" onclick="location.href='/services/${s.id}'">编辑</button>
                         <button class="btn btn-sm btn-success" onclick="deploy(${s.id})">部署</button>
-                        <button class="btn btn-sm btn-danger" onclick="stop(${s.id})">停止</button>
+                        <button class="btn btn-sm btn-warning" onclick="restart(${s.id})">重启</button>
+                        <button class="btn btn-sm btn-secondary" onclick="stop(${s.id})">停止</button>
+                        <button class="btn btn-sm btn-danger" onclick="remove(${s.id})">删除</button>
                     </td>
                 </tr>
             `).join('');
@@ -44,6 +46,17 @@
     }
     async function stop(id) {
         const r = await api(`/api/deploy/stop/${id}`, {method: 'POST'});
+        showToast(r.msg, r.code === 200 ? 'success' : 'danger');
+        loadServices();
+    }
+    async function restart(id) {
+        const r = await api(`/api/deploy/restart/${id}`, {method: 'POST'});
+        showToast(r.msg, r.code === 200 ? 'success' : 'danger');
+        loadServices();
+    }
+    async function remove(id) {
+        if (!confirm('确认删除该容器？')) return;
+        const r = await api(`/api/deploy/remove/${id}`, {method: 'POST'});
         showToast(r.msg, r.code === 200 ? 'success' : 'danger');
         loadServices();
     }

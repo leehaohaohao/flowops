@@ -180,6 +180,57 @@ public class DeployExecutorService {
         DeployService service = serviceMapper.selectById(serviceId);
         try {
             String composePath = service.getVolumeDir() + "/docker-compose.yml";
+            log.info("[{}] 执行 docker compose stop", service.getName());
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "-f", composePath, "stop"
+            );
+            pb.directory(new File(service.getVolumeDir()));
+            Process process = pb.start();
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                log.warn("[{}] docker compose stop 退出码={}，输出:\n{}", service.getName(), exitCode, output);
+            }
+            service.setStatus("stopped");
+            serviceMapper.updateById(service);
+            return Result.ok("停止成功");
+        } catch (Exception e) {
+            log.error("[{}] 停止失败", service.getName(), e);
+            return Result.fail("停止失败: " + e.getMessage());
+        }
+    }
+
+    public Result<Void> restartContainer(Long serviceId) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        try {
+            String composePath = service.getVolumeDir() + "/docker-compose.yml";
+            log.info("[{}] 执行 docker compose restart", service.getName());
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "-f", composePath, "restart"
+            );
+            pb.directory(new File(service.getVolumeDir()));
+            Process process = pb.start();
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                log.warn("[{}] docker compose restart 退出码={}，输出:\n{}", service.getName(), exitCode, output);
+                service.setStatus("stopped");
+                serviceMapper.updateById(service);
+                return Result.fail("重启失败，退出码=" + exitCode);
+            }
+            service.setStatus("running");
+            serviceMapper.updateById(service);
+            return Result.ok("重启成功");
+        } catch (Exception e) {
+            log.error("[{}] 重启失败", service.getName(), e);
+            return Result.fail("重启失败: " + e.getMessage());
+        }
+    }
+
+    public Result<Void> removeContainer(Long serviceId) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        try {
+            String composePath = service.getVolumeDir() + "/docker-compose.yml";
             log.info("[{}] 执行 docker compose down", service.getName());
             ProcessBuilder pb = dockerUtil.newProcessBuilder(
                     "docker", "compose", "-f", composePath, "down"
@@ -193,10 +244,10 @@ public class DeployExecutorService {
             }
             service.setStatus("stopped");
             serviceMapper.updateById(service);
-            return Result.ok("停止成功");
+            return Result.ok("删除成功");
         } catch (Exception e) {
-            log.error("[{}] 停止失败", service.getName(), e);
-            return Result.fail("停止失败: " + e.getMessage());
+            log.error("[{}] 删除失败", service.getName(), e);
+            return Result.fail("删除失败: " + e.getMessage());
         }
     }
 
