@@ -26,7 +26,7 @@
 
     <script>
     async function loadLogs() {
-        const res = await fetch('/api/logs/list', {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        const res = await api('/api/logs/list');
         if (res.code === 200 && res.data.length > 0) {
             document.getElementById('logTable').innerHTML = res.data.map(f => `
                 <tr>
@@ -43,7 +43,7 @@
     }
 
     async function viewLog(filename) {
-        const res = await fetch(`/api/logs/content?filename=${filename}&limit=500`, {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        const res = await api(`/api/logs/content?filename=${filename}&limit=500`);
         if (res.code === 200) {
             document.getElementById('logContent').textContent = res.data;
         } else {

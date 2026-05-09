@@ -20,7 +20,7 @@
 
     <script>
     async function loadServices() {
-        const res = await fetch('/api/services/list', {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        const res = await api('/api/services/list');
         if (res.code === 200) {
             document.getElementById('serviceTable').innerHTML = res.data.map(s => `
                 <tr>
@@ -38,10 +38,14 @@
         }
     }
     async function deploy(id) {
-        await fetch(`/api/deploy/start/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {showToast(r.msg, r.code === 200 ? 'success' : 'danger'); loadServices();});
+        const r = await api(`/api/deploy/start/${id}`, {method: 'POST'});
+        showToast(r.msg, r.code === 200 ? 'success' : 'danger');
+        loadServices();
     }
     async function stop(id) {
-        await fetch(`/api/deploy/stop/${id}`, {method: 'POST', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json()).then(r => {showToast(r.msg, r.code === 200 ? 'success' : 'danger'); loadServices();});
+        const r = await api(`/api/deploy/stop/${id}`, {method: 'POST'});
+        showToast(r.msg, r.code === 200 ? 'success' : 'danger');
+        loadServices();
     }
     loadServices();
     </script>

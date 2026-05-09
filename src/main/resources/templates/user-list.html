@@ -52,7 +52,7 @@
 
     <script>
     async function loadUsers() {
-        const res = await fetch('/api/users/list', {headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        const res = await api('/api/users/list');
         if (res.code === 200) {
             document.getElementById('userTable').innerHTML = res.data.map(u => `
                 <tr>
@@ -71,11 +71,10 @@
     document.getElementById('userForm').onsubmit = async (e) => {
         e.preventDefault();
         const form = new FormData(e.target);
-        const res = await fetch('/api/users/create', {
+        const res = await api('/api/users/create', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Authorization': localStorage.getItem('token')},
             body: JSON.stringify({username: form.get('username'), password: form.get('password'), role: form.get('role')})
-        }).then(r => r.json());
+        });
         if (res.code === 200) {
             showToast(res.msg, 'success');
             bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
@@ -87,7 +86,7 @@
 
     async function deleteUser(id) {
         if (!confirm('确认删除该用户？')) return;
-        const res = await fetch(`/api/users/${id}`, {method: 'DELETE', headers: {'Authorization': localStorage.getItem('token')}}).then(r => r.json());
+        const res = await api(`/api/users/${id}`, {method: 'DELETE'});
         showToast(res.msg, res.code === 200 ? 'success' : 'danger');
         if (res.code === 200) loadUsers();
     }

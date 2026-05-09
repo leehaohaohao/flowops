@@ -1,3 +1,8 @@
+// 判断是否为 Sa-Token 认证失败（错误码 11011~11016）
+function isAuthError(data) {
+    return data && typeof data.code === 'number' && data.code >= 11011 && data.code <= 11016;
+}
+
 // 通用请求封装
 async function api(url, options = {}) {
     const token = localStorage.getItem('token');
@@ -6,7 +11,13 @@ async function api(url, options = {}) {
         headers['Content-Type'] = 'application/json';
     }
     const res = await fetch(url, {...options, headers});
-    return res.json();
+    const data = await res.json();
+    if (res.status === 401 || res.status === 403 || isAuthError(data)) {
+        localStorage.removeItem('token');
+        location.href = '/login';
+        throw new Error('token 已失效，请重新登录');
+    }
+    return data;
 }
 
 // 登出

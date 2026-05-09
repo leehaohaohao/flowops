@@ -95,6 +95,13 @@ public class DeployExecutorService {
             File composeFile = new File(service.getVolumeDir(), "docker-compose.yml");
             Files.writeString(composeFile.toPath(), composeContent);
 
+            // 写入 Dockerfile
+            String dockerfileContent = service.getDockerfile();
+            if (dockerfileContent != null && !dockerfileContent.isEmpty()) {
+                Files.writeString(new File(service.getVolumeDir(), "Dockerfile").toPath(), dockerfileContent);
+                log.info("[{}] 已写入 Dockerfile", service.getName());
+            }
+
             String composePath = composeFile.getAbsolutePath();
 
             // down
