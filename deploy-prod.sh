@@ -72,7 +72,7 @@ fi
 # 构建镜像
 echo "[2/4] 构建镜像..."
 cd "$APP_DIR"
-docker build -f Dockerfile.prod -t "$IMAGE_NAME:latest" .
+docker build -f Dockerfile -t "$IMAGE_NAME:latest" .
 
 # 启动容器
 echo "[3/4] 启动容器（profile: $PROFILE）..."
