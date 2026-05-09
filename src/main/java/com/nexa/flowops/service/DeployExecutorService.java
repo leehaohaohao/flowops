@@ -87,7 +87,10 @@ public class DeployExecutorService {
             // 生成 docker-compose.yml
             String composeContent = service.getDockerCompose();
             if (composeContent == null || composeContent.isEmpty()) {
+                log.info("[{}] dockerCompose 字段为空，使用默认模板", service.getName());
                 composeContent = generateDefaultCompose(service);
+            } else {
+                log.info("[{}] 使用数据库存储的 dockerCompose 内容:\n{}", service.getName(), composeContent);
             }
             File composeFile = new File(service.getVolumeDir(), "docker-compose.yml");
             Files.writeString(composeFile.toPath(), composeContent);

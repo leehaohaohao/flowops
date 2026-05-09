@@ -1,6 +1,11 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(~{::content})}">
 <th:block th:fragment="content">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/monokai.min.css">
+    <style>
+        .CodeMirror { height: 300px; border: 1px solid #ced4da; border-radius: 0.375rem; font-size: 14px; }
+    </style>
     <h2 th:text="${service == null ? '创建服务' : '编辑服务'}"></h2>
     <form id="serviceForm" class="mt-4">
         <input type="hidden" name="id" th:value="${service?.id}">
@@ -14,11 +19,13 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Dockerfile</label>
-            <textarea class="form-control" name="dockerfile" rows="10" th:text="${service?.dockerfile}"></textarea>
+            <textarea class="form-control d-none" name="dockerfile" rows="10" th:text="${service?.dockerfile}"></textarea>
+            <div id="dockerfileEditor"></div>
         </div>
         <div class="mb-3">
             <label class="form-label">docker-compose.yml</label>
-            <textarea class="form-control" name="dockerCompose" rows="10" th:text="${service?.dockerCompose}"></textarea>
+            <textarea class="form-control d-none" name="dockerCompose" rows="10" th:text="${service?.dockerCompose}"></textarea>
+            <div id="dockerComposeEditor"></div>
         </div>
         <button type="submit" class="btn btn-primary">保存</button>
         <button type="button" class="btn btn-secondary" onclick="history.back()">取消</button>
@@ -46,9 +53,24 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/dockerfile/dockerfile.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/edit/matchbrackets.min.js"></script>
     <script>
+    const cmOpts = { theme: 'monokai', lineNumbers: true, tabSize: 2, indentWithTabs: false, matchBrackets: true, lineWrapping: true };
+
+    const dockerfileTa = document.querySelector('textarea[name="dockerfile"]');
+    const dockerComposeTa = document.querySelector('textarea[name="dockerCompose"]');
+
+    const dockerfileCM = CodeMirror(document.getElementById('dockerfileEditor'), { ...cmOpts, mode: 'dockerfile', value: dockerfileTa.value || '' });
+    const dockerComposeCM = CodeMirror(document.getElementById('dockerComposeEditor'), { ...cmOpts, mode: 'yaml', value: dockerComposeTa.value || '' });
+
     document.getElementById('serviceForm').onsubmit = async (e) => {
         e.preventDefault();
+        // 同步 CodeMirror 内容回 textarea
+        dockerfileTa.value = dockerfileCM.getValue();
+        dockerComposeTa.value = dockerComposeCM.getValue();
         const form = new FormData(e.target);
         const data = {name: form.get('name'), port: form.get('port'), dockerfile: form.get('dockerfile'), dockerCompose: form.get('dockerCompose')};
         const id = form.get('id');
