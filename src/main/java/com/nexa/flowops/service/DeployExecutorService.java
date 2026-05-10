@@ -213,19 +213,39 @@ public class DeployExecutorService {
             Files.writeString(new File(logPath).toPath(), output);
 
             int exitCode = process.waitFor();
-            if (exitCode == 0) {
-                log.info("[{}] 部署成功", service.getName());
-                record.setStatus("success");
-                service.setStatus("running");
-            } else {
-                log.error("[{}] 部署失败，退出码={}，输出:\n{}", service.getName(), exitCode, output);
+            if (exitCode != 0) {
+                log.error("[{}] docker compose up 失败，退出码={}，输出:\n{}", service.getName(), exitCode, output);
                 record.setStatus("failed");
                 service.setStatus("stopped");
+                serviceMapper.updateById(service);
+                recordMapper.insert(record);
+                return Result.fail("部署失败，退出码=" + exitCode);
             }
-            serviceMapper.updateById(service);
-            recordMapper.insert(record);
 
-            return exitCode == 0 ? Result.ok("部署成功") : Result.fail("部署失败，退出码=" + exitCode);
+            // compose up 成功，轮询容器状态确认服务真正启动
+            log.info("[{}] compose up 完成，等待容器启动...", service.getName());
+            boolean healthy = waitForContainers(volumeDir, 30);
+            if (healthy) {
+                log.info("[{}] 部署成功，容器已正常运行", service.getName());
+                record.setStatus("success");
+                service.setStatus("running");
+                serviceMapper.updateById(service);
+                recordMapper.insert(record);
+                return Result.ok("部署成功");
+            } else {
+                // 容器未正常运行，获取日志用于排查
+                String containerLogs = getContainerLogs(volumeDir);
+                log.error("[{}] 部署失败，容器未正常运行:\n{}", service.getName(), containerLogs);
+                record.setStatus("failed");
+                service.setStatus("stopped");
+                serviceMapper.updateById(service);
+                recordMapper.insert(record);
+                // 将容器日志追加到部署日志文件
+                Files.writeString(new File(logPath).toPath(),
+                        "\n\n===== 容器启动失败日志 =====\n" + containerLogs,
+                        java.nio.file.StandardOpenOption.APPEND);
+                return Result.fail("部署失败：容器未能正常启动，请查看部署日志");
+            }
         } catch (Exception e) {
             log.error("[{}] 部署异常", service.getName(), e);
             record.setStatus("failed");
@@ -492,6 +512,101 @@ public class DeployExecutorService {
         DeployService service = serviceMapper.selectById(serviceId);
         boolean running = dockerUtil.isContainerRunning(service.getName());
         return Result.ok(Map.of("running", running, "status", running ? "running" : "stopped"));
+    }
+
+    // ==================== 部署健康检查 ====================
+
+    /**
+     * 轮询容器状态，等待所有容器进入稳定运行状态
+     * @return true 表示所有容器正常运行，false 表示有容器异常（重启中或已退出）
+     */
+    private boolean waitForContainers(String volumeDir, int timeoutSeconds) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
+        // 给容器几秒初始启动时间
+        Thread.sleep(3000);
+
+        while (System.currentTimeMillis() < deadline) {
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "ps", "--format", "json"
+            );
+            pb.directory(new File(volumeDir));
+            Process proc = pb.start();
+            String output = readProcessOutput(proc);
+            proc.waitFor();
+
+            if (output.isBlank()) {
+                Thread.sleep(2000);
+                continue;
+            }
+
+            // 解析每行 JSON（每个容器一行）
+            String[] lines = output.trim().split("\n");
+            boolean allRunning = true;
+            boolean anyRestarting = false;
+
+            for (String line : lines) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                try {
+                    Map<String, Object> info = objectMapper.readValue(line, Map.class);
+                    String state = String.valueOf(info.getOrDefault("State", "")).toLowerCase();
+                    // RestartCount 不一定在所有版本都有，优先看 State
+                    if (state.contains("exited") || state.contains("dead")) {
+                        return false; // 容器已退出，直接判定失败
+                    }
+                    if (state.contains("restarting")) {
+                        anyRestarting = true;
+                        allRunning = false;
+                    }
+                    if (!state.contains("running")) {
+                        allRunning = false;
+                    }
+                } catch (Exception ignored) {
+                    // JSON 解析失败，跳过
+                }
+            }
+
+            if (allRunning && !anyRestarting) {
+                return true;
+            }
+            if (anyRestarting) {
+                // 有容器在重启，再等几秒看能否稳定
+                Thread.sleep(3000);
+                // 再检查一次
+                ProcessBuilder pb2 = dockerUtil.newProcessBuilder(
+                        "docker", "compose", "ps", "--format", "json"
+                );
+                pb2.directory(new File(volumeDir));
+                Process proc2 = pb2.start();
+                String output2 = readProcessOutput(proc2);
+                proc2.waitFor();
+                // 如果仍然在重启，判定失败
+                if (output2.toLowerCase().contains("restarting")) {
+                    return false;
+                }
+            }
+
+            Thread.sleep(2000);
+        }
+        return false;
+    }
+
+    /**
+     * 获取所有容器的最近日志，用于排查启动失败原因
+     */
+    private String getContainerLogs(String volumeDir) {
+        try {
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "logs", "--tail", "30"
+            );
+            pb.directory(new File(volumeDir));
+            Process proc = pb.start();
+            String output = readProcessOutput(proc);
+            proc.waitFor();
+            return output;
+        } catch (Exception e) {
+            return "获取容器日志失败: " + e.getMessage();
+        }
     }
 
     // ==================== 工具方法 ====================
