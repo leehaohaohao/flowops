@@ -18,6 +18,8 @@ import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.zip.ZipInputStream;
+import java.util.Collections;
+import java.util.List;
 
 @Service
 public class DeployExecutorService {
@@ -130,10 +132,10 @@ public class DeployExecutorService {
                     proxyTarget = frontendConfig != null && frontendConfig.containsKey("backendUrl")
                             ? (String) frontendConfig.get("backendUrl") : "http://localhost:8080";
                 }
-                String proxyPath = frontendConfig != null && frontendConfig.containsKey("proxyPath")
-                        ? (String) frontendConfig.get("proxyPath") : "";
+                List<Map<String, Object>> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
+                        ? (List<Map<String, Object>>) frontendConfig.get("proxyRules") : Collections.emptyList();
                 String customNginx = frontendConfig != null ? (String) frontendConfig.get("customNginxConfig") : null;
-                generateNginxConf(volumeDir, proxyTarget, proxyPath, customNginx);
+                generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx);
             }
             generateComposeYml(volumeDir, service, serviceType, backendConfig, frontendConfig);
 
@@ -223,7 +225,7 @@ public class DeployExecutorService {
         log.info("已生成 Dockerfile");
     }
 
-    private void generateNginxConf(String volumeDir, String proxyTarget, String proxyPath, String customNginx) throws IOException {
+    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx) throws IOException {
         String content;
         if (customNginx != null && !customNginx.isEmpty()) {
             content = customNginx;
@@ -244,19 +246,31 @@ public class DeployExecutorService {
             sb.append("        add_header Cache-Control \"public, immutable\";\n");
             sb.append("    }\n");
 
-            // 只有配置了代理路径才生成反向代理 location
-            if (proxyPath != null && !proxyPath.isEmpty()) {
-                String path = proxyPath.startsWith("/") ? proxyPath : "/" + proxyPath;
-                if (!path.endsWith("/")) path = path + "/";
-                sb.append("\n");
-                sb.append("    # 反向代理\n");
-                sb.append("    location ").append(path).append(" {\n");
-                sb.append("        proxy_pass ").append(target).append(path).append(";\n");
-                sb.append("        proxy_set_header Host $host;\n");
-                sb.append("        proxy_set_header X-Real-IP $remote_addr;\n");
-                sb.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n");
-                sb.append("        proxy_set_header X-Forwarded-Proto $scheme;\n");
-                sb.append("    }\n");
+            // 遍历代理规则列表，逐条生成 location 块
+            if (proxyRules != null) {
+                for (Map<String, Object> rule : proxyRules) {
+                    String path = getString(rule, "path", "");
+                    if (path.isEmpty()) continue;
+                    if (!path.startsWith("/")) path = "/" + path;
+                    if (!path.endsWith("/")) path = path + "/";
+                    boolean isSse = Boolean.TRUE.equals(rule.get("sse"));
+
+                    sb.append("\n");
+                    sb.append("    # 反向代理: ").append(path).append("\n");
+                    sb.append("    location ").append(path).append(" {\n");
+                    sb.append("        proxy_pass ").append(target).append(path).append(";\n");
+                    sb.append("        proxy_set_header Host $host;\n");
+                    sb.append("        proxy_set_header X-Real-IP $remote_addr;\n");
+                    sb.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n");
+                    sb.append("        proxy_set_header X-Forwarded-Proto $scheme;\n");
+                    if (isSse) {
+                        sb.append("        proxy_buffering off;\n");
+                        sb.append("        proxy_cache off;\n");
+                        sb.append("        proxy_read_timeout 86400s;\n");
+                        sb.append("        proxy_send_timeout 86400s;\n");
+                    }
+                    sb.append("    }\n");
+                }
             }
 
             sb.append("\n");

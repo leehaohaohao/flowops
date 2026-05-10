@@ -9,6 +9,9 @@
         .config-section h5 { margin-bottom: 1rem; }
         .env-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
         .env-row input { flex: 1; }
+        .proxy-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
+        .proxy-row .proxy-path { flex: 2; }
+        .proxy-row .proxy-sse { flex: none; white-space: nowrap; }
     </style>
 
     <h2 th:text="${service == null ? '创建服务' : '编辑服务'}"></h2>
@@ -67,20 +70,23 @@
         <div class="config-section" id="frontendSection">
             <h5>前端配置</h5>
             <div class="row mb-3">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label">基础镜像</label>
                     <input type="text" class="form-control" id="frontendBaseImage" value="nginx:alpine">
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">代理路径</label>
-                    <input type="text" class="form-control" id="proxyPath" placeholder="/api/" value="/api/">
-                    <small class="text-muted">后端接口路径前缀，留空则不生成代理配置</small>
-                </div>
-                <div class="col-md-4" id="backendUrlGroup">
+                <div class="col-md-6" id="backendUrlGroup">
                     <label class="form-label">后端地址</label>
                     <input type="text" class="form-control" id="frontendBackendUrl" placeholder="http://121.40.154.188:8090">
                     <small class="text-muted">仅纯前端模式需要，一体模式自动使用 Docker 内部通信</small>
                 </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">
+                    代理规则
+                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="addProxyRule()">+ 添加</button>
+                </label>
+                <small class="text-muted d-block mb-2">配置 Nginx 反向代理路径，如 /api/、/api/sse/ 等</small>
+                <div id="proxyRulesContainer"></div>
             </div>
 
             <!-- 高级 Nginx 配置 -->
@@ -201,6 +207,32 @@
         return vars;
     }
 
+    // ==================== 代理规则 ====================
+    function addProxyRule(path, sse) {
+        const container = document.getElementById('proxyRulesContainer');
+        const row = document.createElement('div');
+        row.className = 'proxy-row';
+        row.innerHTML = `
+            <input type="text" class="form-control form-control-sm proxy-path" placeholder="/api/" value="${path || ''}">
+            <label class="proxy-sse form-check form-check-inline mb-0">
+                <input type="checkbox" class="form-check-input proxy-sse-check" ${sse ? 'checked' : ''}>
+                <span class="form-check-label">SSE</span>
+            </label>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function getProxyRules() {
+        const rules = [];
+        document.querySelectorAll('#proxyRulesContainer .proxy-row').forEach(row => {
+            const path = row.querySelector('.proxy-path').value.trim();
+            const sse = row.querySelector('.proxy-sse-check').checked;
+            if (path) rules.push({ path, sse });
+        });
+        return rules;
+    }
+
     // ==================== 收集配置 ====================
     function collectServiceConfig() {
         const type = serviceTypeSelect.value;
@@ -220,7 +252,7 @@
             config.frontend = {
                 baseImage: document.getElementById('frontendBaseImage').value.trim(),
                 backendUrl: document.getElementById('frontendBackendUrl').value.trim() || null,
-                proxyPath: document.getElementById('proxyPath').value.trim(),
+                proxyRules: getProxyRules(),
                 customNginxConfig: (customNginxChecked && nginxCM && nginxCM.getValue().trim()) ? nginxCM.getValue() : null
             };
         }
@@ -254,8 +286,8 @@
             const proxyTarget = type === 'fullstack'
                 ? `http://backend:${config.backend.containerPort}`
                 : (config.frontend.backendUrl || 'http://localhost:8080');
-            const proxyPath = config.frontend.proxyPath || '';
-            nginxConf = generateNginxConfPreview(proxyTarget, proxyPath);
+            const proxyRules = config.frontend.proxyRules || [];
+            nginxConf = generateNginxConfPreview(proxyTarget, proxyRules);
         }
 
         if (type === 'backend') {
@@ -290,23 +322,32 @@
         new bootstrap.Modal(document.getElementById('previewModal')).show();
     }
 
-    function generateNginxConfPreview(proxyTarget, proxyPath) {
+    function generateNginxConfPreview(proxyTarget, proxyRules) {
         const t = proxyTarget.endsWith('/') ? proxyTarget.slice(0, -1) : proxyTarget;
-        let path = proxyPath || '';
-        if (path && !path.startsWith('/')) path = '/' + path;
-        if (path && !path.endsWith('/')) path = path + '/';
 
-        let proxyBlock = '';
-        if (path) {
-            proxyBlock = `
-    # 反向代理
-    location ${path} {
-        proxy_pass ${t}${path};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }`;
+        let proxyBlocks = '';
+        if (proxyRules && proxyRules.length) {
+            for (const rule of proxyRules) {
+                let path = rule.path || '';
+                if (!path) continue;
+                if (!path.startsWith('/')) path = '/' + path;
+                if (!path.endsWith('/')) path = path + '/';
+                let block = `\n    # 反向代理: ${path}\n`;
+                block += `    location ${path} {\n`;
+                block += `        proxy_pass ${t}${path};\n`;
+                block += `        proxy_set_header Host $host;\n`;
+                block += `        proxy_set_header X-Real-IP $remote_addr;\n`;
+                block += `        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n`;
+                block += `        proxy_set_header X-Forwarded-Proto $scheme;\n`;
+                if (rule.sse) {
+                    block += `        proxy_buffering off;\n`;
+                    block += `        proxy_cache off;\n`;
+                    block += `        proxy_read_timeout 86400s;\n`;
+                    block += `        proxy_send_timeout 86400s;\n`;
+                }
+                block += `    }`;
+                proxyBlocks += block;
+            }
         }
 
         return `server {
@@ -319,7 +360,7 @@
     location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
-    }${proxyBlock}
+    }${proxyBlocks}
 
     # SPA 路由
     location / {
@@ -408,7 +449,11 @@
         if (config.frontend) {
             document.getElementById('frontendBaseImage').value = config.frontend.baseImage || 'nginx:alpine';
             document.getElementById('frontendBackendUrl').value = config.frontend.backendUrl || '';
-            document.getElementById('proxyPath').value = config.frontend.proxyPath || '/api/';
+            if (config.frontend.proxyRules) {
+                for (const rule of config.frontend.proxyRules) {
+                    addProxyRule(rule.path, rule.sse);
+                }
+            }
             if (config.frontend.customNginxConfig) {
                 document.getElementById('useCustomNginx').checked = true;
             }
