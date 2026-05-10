@@ -227,6 +227,11 @@ public class DeployExecutorService {
             boolean healthy = waitForContainers(volumeDir, 30);
             if (healthy) {
                 log.info("[{}] 部署成功，容器已正常运行", service.getName());
+                // 追加容器内服务的运行日志
+                String containerLogs = getContainerLogs(volumeDir);
+                Files.writeString(new File(logPath).toPath(),
+                        "\n\n===== 服务运行日志 =====\n" + containerLogs,
+                        java.nio.file.StandardOpenOption.APPEND);
                 record.setStatus("success");
                 service.setStatus("running");
                 serviceMapper.updateById(service);
