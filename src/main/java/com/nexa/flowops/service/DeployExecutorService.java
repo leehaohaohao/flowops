@@ -66,16 +66,61 @@ public class DeployExecutorService {
         try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
             byte[] buffer = new byte[1024];
             java.util.zip.ZipEntry entry;
+
+            // 第一步：检测 zip 是否只有一个顶层目录（如 dist.zip 里包了一层 dist/）
+            Set<String> topDirs = new LinkedHashSet<>();
+            List<String> allEntries = new ArrayList<>();
             while ((entry = zis.getNextEntry()) != null) {
-                File newFile = new File(targetDir, entry.getName());
-                if (entry.isDirectory()) {
-                    newFile.mkdirs();
-                } else {
-                    new File(newFile.getParent()).mkdirs();
-                    try (FileOutputStream fos = new FileOutputStream(newFile)) {
-                        int len;
-                        while ((len = zis.read(buffer)) > 0) {
-                            fos.write(buffer, 0, len);
+                String name = entry.getName();
+                allEntries.add(name);
+                // 顶层目录：包含 / 且去掉 / 后不再包含 /
+                if (name.endsWith("/")) {
+                    String noSlash = name.substring(0, name.length() - 1);
+                    if (!noSlash.contains("/")) {
+                        topDirs.add(noSlash);
+                    }
+                } else if (!name.contains("/")) {
+                    topDirs.add(name); // 顶层文件
+                }
+            }
+
+            // 判断是否需要跳过顶层目录
+            // 条件：只有一个顶层目录，且所有条目都以它开头
+            String stripPrefix = null;
+            if (topDirs.size() == 1) {
+                String candidate = topDirs.iterator().next() + "/";
+                boolean allUnder = true;
+                for (String name : allEntries) {
+                    if (!name.startsWith(candidate) && !name.equals(candidate.substring(0, candidate.length() - 1))) {
+                        allUnder = false;
+                        break;
+                    }
+                }
+                if (allUnder) {
+                    stripPrefix = candidate;
+                    log.info("检测到 zip 单层根目录「{}」，自动跳过", topDirs.iterator().next());
+                }
+            }
+
+            // 第二步：重新打开流，正式解压
+            try (ZipInputStream zis2 = new ZipInputStream(file.getInputStream())) {
+                while ((entry = zis2.getNextEntry()) != null) {
+                    String name = entry.getName();
+                    if (stripPrefix != null && name.startsWith(stripPrefix)) {
+                        name = name.substring(stripPrefix.length());
+                    }
+                    if (name.isEmpty()) continue;
+
+                    File newFile = new File(targetDir, name);
+                    if (entry.isDirectory()) {
+                        newFile.mkdirs();
+                    } else {
+                        new File(newFile.getParent()).mkdirs();
+                        try (FileOutputStream fos = new FileOutputStream(newFile)) {
+                            int len;
+                            while ((len = zis2.read(buffer)) > 0) {
+                                fos.write(buffer, 0, len);
+                            }
                         }
                     }
                 }
