@@ -32,8 +32,12 @@ public class ServiceController {
     @PostMapping("/create")
     @SaCheckRole("admin")
     public Result<Void> create(@RequestBody Map<String, Object> params) {
-        serviceMgmtService.createService(params);
-        return Result.ok("创建成功");
+        try {
+            serviceMgmtService.createService(params);
+            return Result.ok("创建成功");
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     @PutMapping("/{id}")

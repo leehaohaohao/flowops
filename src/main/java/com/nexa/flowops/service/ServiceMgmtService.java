@@ -1,5 +1,6 @@
 package com.nexa.flowops.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import org.springframework.stereotype.Service;
@@ -27,12 +28,20 @@ public class ServiceMgmtService {
     }
 
     public void createService(Map<String, Object> params) {
+        String name = (String) params.get("name");
+        // 检查服务名是否已存在
+        Long count = serviceMapper.selectCount(
+                new LambdaQueryWrapper<DeployService>().eq(DeployService::getName, name));
+        if (count > 0) {
+            throw new RuntimeException("服务名「" + name + "」已存在，请更换名称");
+        }
+
         DeployService service = new DeployService();
-        service.setName((String) params.get("name"));
+        service.setName(name);
         service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
         service.setServiceType((String) params.get("serviceType"));
         service.setServiceConfig((String) params.get("serviceConfig"));
-        service.setVolumeDir(storagePath + "/" + service.getName());
+        service.setVolumeDir(storagePath + "/" + name);
         service.setStatus("stopped");
         serviceMapper.insert(service);
 
