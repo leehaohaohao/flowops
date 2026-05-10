@@ -12,7 +12,7 @@
         .proxy-rule { border: 1px solid #dee2e6; border-radius: 0.375rem; margin-bottom: 0.5rem; }
         .proxy-rule-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: #e9ecef; cursor: pointer; border-radius: 0.375rem; }
         .proxy-rule-header .proxy-path-display { flex: 1; font-weight: 500; }
-        .proxy-rule-body { padding: 0.75rem; display: none; }
+        .proxy-rule-body { padding: 0.75rem; }
         .proxy-directive { display: flex; gap: 0.5rem; margin-bottom: 0.35rem; align-items: center; }
         .proxy-directive input { flex: 1; font-family: monospace; font-size: 13px; }
     </style>
@@ -263,7 +263,7 @@
                 <button type="button" class="btn btn-sm btn-outline-danger"
                         onclick="event.stopPropagation(); this.closest('.proxy-rule').remove()">删除规则</button>
             </div>
-            <div class="proxy-rule-body">
+            <div class="proxy-rule-body" style="display:none">
                 <div class="mb-2">
                     <label class="form-label mb-1"><small>路径</small></label>
                     <input type="text" class="form-control form-control-sm proxy-rule-path" value="${displayPath}"
