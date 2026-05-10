@@ -303,6 +303,7 @@ public class DeployExecutorService {
             sb.append("    build: .\n");
             sb.append("    ports:\n");
             sb.append("      - \"").append(hostPort).append(":").append(containerPort).append("\"\n");
+            appendVolumes(sb, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
         } else if ("frontend".equals(serviceType)) {
@@ -321,6 +322,7 @@ public class DeployExecutorService {
             sb.append("    build: .\n");
             sb.append("    expose:\n");
             sb.append("      - \"").append(containerPort).append("\"\n");
+            appendVolumes(sb, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
 
@@ -349,6 +351,19 @@ public class DeployExecutorService {
         for (Map.Entry<String, String> entry : envVars.entrySet()) {
             sb.append("      - ").append(entry.getKey()).append("=").append(entry.getValue()).append("\n");
         }
+    }
+
+    // 添加 volume 挂载（数据持久化）
+    @SuppressWarnings("unchecked")
+    private void appendVolumes(StringBuilder sb, Map<String, Object> config) {
+        if (config == null || !config.containsKey("dataMount")) return;
+        Map<String, Object> dataMount = (Map<String, Object>) config.get("dataMount");
+        if (dataMount == null) return;
+        String containerPath = getString(dataMount, "containerPath", "");
+        if (containerPath.isEmpty()) return;
+        String hostDir = getString(dataMount, "hostDir", "./data");
+        sb.append("    volumes:\n");
+        sb.append("      - ").append(hostDir).append(":").append(containerPath).append("\n");
     }
 
     // ==================== 容器操作 ====================

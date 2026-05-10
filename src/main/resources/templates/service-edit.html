@@ -67,6 +67,21 @@
                 </label>
                 <div id="envVarsContainer"></div>
             </div>
+            <div class="mb-3">
+                <label class="form-label">数据持久化</label>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="dataMountContainerPath"
+                               placeholder="容器内数据目录，如 /app/data">
+                        <small class="text-muted">留空则不挂载。填写后数据将持久化到宿主机，重启不丢失</small>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="dataMountHostDir"
+                               placeholder="宿主机目录（默认 ./data）" value="./data">
+                        <small class="text-muted">相对于服务部署目录的路径</small>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- 前端配置区域 -->
@@ -329,12 +344,20 @@
         const config = {};
 
         if (type === 'backend' || type === 'fullstack') {
+            const containerPath = document.getElementById('dataMountContainerPath').value.trim();
             config.backend = {
                 baseImage: document.getElementById('backendBaseImage').value.trim(),
                 containerPort: parseInt(document.getElementById('backendContainerPort').value) || 8080,
                 startupCommand: document.getElementById('backendStartupCommand').value.trim(),
                 envVars: getEnvVars()
             };
+            // 数据持久化配置
+            if (containerPath) {
+                config.backend.dataMount = {
+                    containerPath: containerPath,
+                    hostDir: document.getElementById('dataMountHostDir').value.trim() || './data'
+                };
+            }
         }
 
         if (type === 'frontend' || type === 'fullstack') {
@@ -382,6 +405,9 @@
 
         if (type === 'backend') {
             compose += `  backend:\n    build: .\n    ports:\n      - "${port}:${config.backend.containerPort}"\n`;
+            if (config.backend.dataMount) {
+                compose += `    volumes:\n      - ${config.backend.dataMount.hostDir}:${config.backend.dataMount.containerPath}\n`;
+            }
             if (config.backend.envVars && Object.keys(config.backend.envVars).length) {
                 compose += `    environment:\n`;
                 for (const [k, v] of Object.entries(config.backend.envVars)) {
@@ -393,6 +419,9 @@
             compose += `  frontend:\n    image: ${config.frontend.baseImage}\n    ports:\n      - "${port}:80"\n    volumes:\n      - ./dist:/usr/share/nginx/html\n      - ./default.conf:/etc/nginx/conf.d/default.conf\n    restart: unless-stopped\n`;
         } else if (type === 'fullstack') {
             compose += `  backend:\n    build: .\n    expose:\n      - "${config.backend.containerPort}"\n`;
+            if (config.backend.dataMount) {
+                compose += `    volumes:\n      - ${config.backend.dataMount.hostDir}:${config.backend.dataMount.containerPath}\n`;
+            }
             if (config.backend.envVars && Object.keys(config.backend.envVars).length) {
                 compose += `    environment:\n`;
                 for (const [k, v] of Object.entries(config.backend.envVars)) {
@@ -524,6 +553,10 @@
                 for (const [k, v] of Object.entries(config.backend.envVars)) {
                     addEnvVar(k, v);
                 }
+            }
+            if (config.backend.dataMount) {
+                document.getElementById('dataMountContainerPath').value = config.backend.dataMount.containerPath || '';
+                document.getElementById('dataMountHostDir').value = config.backend.dataMount.hostDir || './data';
             }
         }
 
