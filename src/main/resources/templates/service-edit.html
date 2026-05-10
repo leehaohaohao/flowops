@@ -21,6 +21,8 @@
 
     <form id="serviceForm" class="mt-4">
         <input type="hidden" name="id" th:value="${service?.id}">
+        <input type="hidden" id="serverServiceType" th:if="${service}" th:value="${service?.serviceType}">
+        <input type="hidden" id="serverServiceConfig" th:if="${service}" th:value="${service?.serviceConfig}">
 
         <!-- Basic info -->
         <div class="row mb-3">
@@ -530,20 +532,22 @@
 
     // ==================== 初始化：加载已有数据 ====================
     (function initFromServer() {
-        const serviceData = /*[[${service}]]*/ null;
-        if (!serviceData) {
+        const configInput = document.getElementById('serverServiceConfig');
+        if (!configInput) {
             updateSections();
             // 初始化空的 CodeMirror 编辑器
             nginxCM = CodeMirror(document.getElementById('nginxConfigEditor'), { ...cmOpts, mode: 'yaml', value: '' });
             return;
         }
 
-        if (serviceData.serviceType) {
-            serviceTypeSelect.value = serviceData.serviceType;
+        // 恢复服务类型下拉框
+        const typeInput = document.getElementById('serverServiceType');
+        if (typeInput && typeInput.value) {
+            serviceTypeSelect.value = typeInput.value;
         }
 
         let config = {};
-        try { config = JSON.parse(serviceData.serviceConfig || '{}'); } catch(e) {}
+        try { config = JSON.parse(configInput.value || '{}'); } catch(e) { console.warn('解析 serviceConfig 失败', e); }
 
         if (config.backend) {
             document.getElementById('backendBaseImage').value = config.backend.baseImage || 'openjdk:17-jdk-slim';
