@@ -40,7 +40,7 @@ Changes: removed `dockerfile` and `docker_compose` columns, added `service_type`
 Run:
 ```sql
 ALTER TABLE deploy_service
-    ADD COLUMN service_type VARCHAR(20) NOT NULL DEFAULT 'backend AFTER volume_dir,
+    ADD COLUMN service_type VARCHAR(20) NOT NULL DEFAULT 'backend' AFTER volume_dir,
     ADD COLUMN service_config TEXT AFTER service_type;
 ```
 
