@@ -10,8 +10,7 @@
         .env-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
         .env-row input { flex: 1; }
         .proxy-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
-        .proxy-row .proxy-path { flex: 2; }
-        .proxy-row .proxy-sse { flex: none; white-space: nowrap; }
+        .proxy-row input { flex: 1; }
     </style>
 
     <h2 th:text="${service == null ? '创建服务' : '编辑服务'}"></h2>
@@ -208,16 +207,12 @@
     }
 
     // ==================== 代理规则 ====================
-    function addProxyRule(path, sse) {
+    function addProxyRule(path) {
         const container = document.getElementById('proxyRulesContainer');
         const row = document.createElement('div');
         row.className = 'proxy-row';
         row.innerHTML = `
             <input type="text" class="form-control form-control-sm proxy-path" placeholder="/api/" value="${path || ''}">
-            <label class="proxy-sse form-check form-check-inline mb-0">
-                <input type="checkbox" class="form-check-input proxy-sse-check" ${sse ? 'checked' : ''}>
-                <span class="form-check-label">SSE</span>
-            </label>
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
         `;
         container.appendChild(row);
@@ -227,8 +222,7 @@
         const rules = [];
         document.querySelectorAll('#proxyRulesContainer .proxy-row').forEach(row => {
             const path = row.querySelector('.proxy-path').value.trim();
-            const sse = row.querySelector('.proxy-sse-check').checked;
-            if (path) rules.push({ path, sse });
+            if (path) rules.push(path);
         });
         return rules;
     }
@@ -327,26 +321,19 @@
 
         let proxyBlocks = '';
         if (proxyRules && proxyRules.length) {
-            for (const rule of proxyRules) {
-                let path = rule.path || '';
+            for (const rawPath of proxyRules) {
+                let path = rawPath || '';
                 if (!path) continue;
                 if (!path.startsWith('/')) path = '/' + path;
                 if (!path.endsWith('/')) path = path + '/';
-                let block = `\n    # 反向代理: ${path}\n`;
-                block += `    location ${path} {\n`;
-                block += `        proxy_pass ${t}${path};\n`;
-                block += `        proxy_set_header Host $host;\n`;
-                block += `        proxy_set_header X-Real-IP $remote_addr;\n`;
-                block += `        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n`;
-                block += `        proxy_set_header X-Forwarded-Proto $scheme;\n`;
-                if (rule.sse) {
-                    block += `        proxy_buffering off;\n`;
-                    block += `        proxy_cache off;\n`;
-                    block += `        proxy_read_timeout 86400s;\n`;
-                    block += `        proxy_send_timeout 86400s;\n`;
-                }
-                block += `    }`;
-                proxyBlocks += block;
+                proxyBlocks += `\n    # 反向代理: ${path}`;
+                proxyBlocks += `\n    location ${path} {`;
+                proxyBlocks += `\n        proxy_pass ${t}${path};`;
+                proxyBlocks += `\n        proxy_set_header Host $host;`;
+                proxyBlocks += `\n        proxy_set_header X-Real-IP $remote_addr;`;
+                proxyBlocks += `\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`;
+                proxyBlocks += `\n        proxy_set_header X-Forwarded-Proto $scheme;`;
+                proxyBlocks += `\n    }`;
             }
         }
 
@@ -450,8 +437,8 @@
             document.getElementById('frontendBaseImage').value = config.frontend.baseImage || 'nginx:alpine';
             document.getElementById('frontendBackendUrl').value = config.frontend.backendUrl || '';
             if (config.frontend.proxyRules) {
-                for (const rule of config.frontend.proxyRules) {
-                    addProxyRule(rule.path, rule.sse);
+                for (const path of config.frontend.proxyRules) {
+                    addProxyRule(path);
                 }
             }
             if (config.frontend.customNginxConfig) {

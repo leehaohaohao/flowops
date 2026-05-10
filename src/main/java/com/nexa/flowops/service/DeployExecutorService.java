@@ -132,8 +132,8 @@ public class DeployExecutorService {
                     proxyTarget = frontendConfig != null && frontendConfig.containsKey("backendUrl")
                             ? (String) frontendConfig.get("backendUrl") : "http://localhost:8080";
                 }
-                List<Map<String, Object>> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
-                        ? (List<Map<String, Object>>) frontendConfig.get("proxyRules") : Collections.emptyList();
+                List<String> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
+                        ? (List<String>) frontendConfig.get("proxyRules") : Collections.emptyList();
                 String customNginx = frontendConfig != null ? (String) frontendConfig.get("customNginxConfig") : null;
                 generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx);
             }
@@ -225,7 +225,7 @@ public class DeployExecutorService {
         log.info("已生成 Dockerfile");
     }
 
-    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx) throws IOException {
+    private void generateNginxConf(String volumeDir, String proxyTarget, List<String> proxyRules, String customNginx) throws IOException {
         String content;
         if (customNginx != null && !customNginx.isEmpty()) {
             content = customNginx;
@@ -248,12 +248,11 @@ public class DeployExecutorService {
 
             // 遍历代理规则列表，逐条生成 location 块
             if (proxyRules != null) {
-                for (Map<String, Object> rule : proxyRules) {
-                    String path = getString(rule, "path", "");
-                    if (path.isEmpty()) continue;
+                for (String rawPath : proxyRules) {
+                    if (rawPath == null || rawPath.isEmpty()) continue;
+                    String path = rawPath;
                     if (!path.startsWith("/")) path = "/" + path;
                     if (!path.endsWith("/")) path = path + "/";
-                    boolean isSse = Boolean.TRUE.equals(rule.get("sse"));
 
                     sb.append("\n");
                     sb.append("    # 反向代理: ").append(path).append("\n");
@@ -263,12 +262,6 @@ public class DeployExecutorService {
                     sb.append("        proxy_set_header X-Real-IP $remote_addr;\n");
                     sb.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n");
                     sb.append("        proxy_set_header X-Forwarded-Proto $scheme;\n");
-                    if (isSse) {
-                        sb.append("        proxy_buffering off;\n");
-                        sb.append("        proxy_cache off;\n");
-                        sb.append("        proxy_read_timeout 86400s;\n");
-                        sb.append("        proxy_send_timeout 86400s;\n");
-                    }
                     sb.append("    }\n");
                 }
             }
