@@ -11,7 +11,7 @@ import java.util.stream.Stream;
 @Service
 public class LogService {
 
-    private final String logBasePath = "/data/flowops/logs";
+    private final String logBasePath = "/data/flowops/services/logs";
 
     public LogService() {
         // 确保日志目录存在

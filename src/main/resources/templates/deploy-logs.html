@@ -25,6 +25,8 @@
     </div>
 
     <script>
+    let ws = null;
+
     async function loadLogs() {
         const res = await api('/api/logs/list');
         if (res.code === 200 && res.data.length > 0) {
@@ -42,13 +44,39 @@
         }
     }
 
-    async function viewLog(filename) {
-        const res = await api(`/api/logs/content?filename=${filename}&limit=500`);
-        if (res.code === 200) {
-            document.getElementById('logContent').textContent = res.data;
-        } else {
-            document.getElementById('logContent').textContent = res.msg || '加载失败';
+    function viewLog(filename) {
+        const logEl = document.getElementById('logContent');
+        logEl.textContent = '加载中...';
+
+        // 关闭旧的 WebSocket
+        if (ws) {
+            ws.close();
+            ws = null;
         }
+
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(protocol + '//' + location.host + '/ws/logs');
+
+        ws.onopen = () => ws.send(filename);
+
+        ws.onmessage = (e) => {
+            // 第一条消息是全量内容，后续是增量追加
+            if (logEl.textContent === '加载中...') {
+                logEl.textContent = e.data;
+            } else {
+                logEl.textContent += e.data;
+            }
+            // 自动滚到底部
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        ws.onerror = () => {
+            logEl.textContent = 'WebSocket 连接失败，请重试';
+        };
+
+        ws.onclose = () => {
+            // 如果不是主动关闭（切换文件），不做处理
+        };
     }
 
     loadLogs();
