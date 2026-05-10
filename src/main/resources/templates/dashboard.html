@@ -28,4 +28,15 @@
             </div>
         </div>
     </div>
+    <script>
+        async function loadDashboard() {
+            const res = await api('/api/stats/dashboard');
+            if (res.code !== 200) return;
+            const d = res.data;
+            document.getElementById('totalServices').textContent = d.totalServices;
+            document.getElementById('runningServices').textContent = d.runningServices;
+            document.getElementById('totalDeploys').textContent = d.totalDeploys;
+        }
+        loadDashboard();
+    </script>
 </th:block>
