@@ -132,8 +132,8 @@ public class DeployExecutorService {
                     proxyTarget = frontendConfig != null && frontendConfig.containsKey("backendUrl")
                             ? (String) frontendConfig.get("backendUrl") : "http://localhost:8080";
                 }
-                List<String> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
-                        ? (List<String>) frontendConfig.get("proxyRules") : Collections.emptyList();
+                List<Map<String, Object>> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
+                        ? (List<Map<String, Object>>) frontendConfig.get("proxyRules") : Collections.emptyList();
                 String customNginx = frontendConfig != null ? (String) frontendConfig.get("customNginxConfig") : null;
                 generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx);
             }
@@ -225,13 +225,12 @@ public class DeployExecutorService {
         log.info("已生成 Dockerfile");
     }
 
-    private void generateNginxConf(String volumeDir, String proxyTarget, List<String> proxyRules, String customNginx) throws IOException {
+    @SuppressWarnings("unchecked")
+    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx) throws IOException {
         String content;
         if (customNginx != null && !customNginx.isEmpty()) {
             content = customNginx;
         } else {
-            String target = proxyTarget.endsWith("/") ? proxyTarget.substring(0, proxyTarget.length() - 1) : proxyTarget;
-
             StringBuilder sb = new StringBuilder();
             sb.append("server {\n");
             sb.append("    listen 80;\n");
@@ -248,20 +247,32 @@ public class DeployExecutorService {
 
             // 遍历代理规则列表，逐条生成 location 块
             if (proxyRules != null) {
-                for (String rawPath : proxyRules) {
-                    if (rawPath == null || rawPath.isEmpty()) continue;
-                    String path = rawPath;
+                for (Map<String, Object> rule : proxyRules) {
+                    String path = getString(rule, "path", "");
+                    if (path.isEmpty()) continue;
                     if (!path.startsWith("/")) path = "/" + path;
                     if (!path.endsWith("/")) path = path + "/";
 
                     sb.append("\n");
                     sb.append("    # 反向代理: ").append(path).append("\n");
                     sb.append("    location ").append(path).append(" {\n");
-                    sb.append("        proxy_pass ").append(target).append(path).append(";\n");
-                    sb.append("        proxy_set_header Host $host;\n");
-                    sb.append("        proxy_set_header X-Real-IP $remote_addr;\n");
-                    sb.append("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n");
-                    sb.append("        proxy_set_header X-Forwarded-Proto $scheme;\n");
+
+                    // 遍历该规则下的所有指令
+                    List<Map<String, String>> directives = (List<Map<String, String>>) rule.get("directives");
+                    if (directives != null) {
+                        for (Map<String, String> d : directives) {
+                            String name = d.get("name");
+                            String value = d.get("value");
+                            if (name != null && !name.isEmpty()) {
+                                sb.append("        ").append(name);
+                                if (value != null && !value.isEmpty()) {
+                                    sb.append(" ").append(value);
+                                }
+                                sb.append(";\n");
+                            }
+                        }
+                    }
+
                     sb.append("    }\n");
                 }
             }

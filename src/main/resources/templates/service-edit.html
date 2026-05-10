@@ -9,8 +9,12 @@
         .config-section h5 { margin-bottom: 1rem; }
         .env-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
         .env-row input { flex: 1; }
-        .proxy-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
-        .proxy-row input { flex: 1; }
+        .proxy-rule { border: 1px solid #dee2e6; border-radius: 0.375rem; margin-bottom: 0.5rem; }
+        .proxy-rule-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: #e9ecef; cursor: pointer; border-radius: 0.375rem; }
+        .proxy-rule-header .proxy-path-display { flex: 1; font-weight: 500; }
+        .proxy-rule-body { padding: 0.75rem; display: none; }
+        .proxy-directive { display: flex; gap: 0.5rem; margin-bottom: 0.35rem; align-items: center; }
+        .proxy-directive input { flex: 1; font-family: monospace; font-size: 13px; }
     </style>
 
     <h2 th:text="${service == null ? '创建服务' : '编辑服务'}"></h2>
@@ -207,12 +211,84 @@
     }
 
     // ==================== 代理规则 ====================
-    function addProxyRule(path) {
+    // 代理规则计数器，用于生成唯一 ID
+    let proxyRuleCounter = 0;
+
+    // 默认代理指令模板
+    function defaultDirectives(path) {
+        const backendTarget = getBackendTarget();
+        return [
+            { name: 'proxy_pass', value: backendTarget + path },
+            { name: 'proxy_set_header', value: 'Host $host' },
+            { name: 'proxy_set_header', value: 'X-Real-IP $remote_addr' },
+            { name: 'proxy_set_header', value: 'X-Forwarded-For $proxy_add_x_forwarded_for' },
+            { name: 'proxy_set_header', value: 'X-Forwarded-Proto $scheme' }
+        ];
+    }
+
+    // 获取当前后端目标地址（用于生成默认 proxy_pass）
+    function getBackendTarget() {
+        const type = serviceTypeSelect.value;
+        if (type === 'fullstack') {
+            const port = document.getElementById('backendContainerPort').value || '8080';
+            return 'http://backend:' + port;
+        }
+        return document.getElementById('frontendBackendUrl').value.trim() || 'http://localhost:8080';
+    }
+
+    function addProxyRule(path, directives) {
+        const id = proxyRuleCounter++;
         const container = document.getElementById('proxyRulesContainer');
+        const displayPath = path || '/api/';
+        const dirs = directives || defaultDirectives(displayPath);
+
+        const rule = document.createElement('div');
+        rule.className = 'proxy-rule';
+        rule.dataset.ruleId = id;
+
+        // 构建指令 HTML
+        let directivesHtml = '';
+        for (const d of dirs) {
+            directivesHtml += `
+                <div class="proxy-directive">
+                    <input type="text" class="form-control form-control-sm dir-name" value="${d.name}">
+                    <input type="text" class="form-control form-control-sm dir-value" value="${d.value}">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+                </div>`;
+        }
+
+        rule.innerHTML = `
+            <div class="proxy-rule-header" onclick="toggleProxyRule(this)">
+                <span class="proxy-path-display">${displayPath}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        onclick="event.stopPropagation(); this.closest('.proxy-rule').remove()">删除规则</button>
+            </div>
+            <div class="proxy-rule-body">
+                <div class="mb-2">
+                    <label class="form-label mb-1"><small>路径</small></label>
+                    <input type="text" class="form-control form-control-sm proxy-rule-path" value="${displayPath}"
+                           onchange="this.closest('.proxy-rule').querySelector('.proxy-path-display').textContent = this.value">
+                </div>
+                <label class="form-label mb-1"><small>指令</small></label>
+                <div class="proxy-directives">${directivesHtml}</div>
+                <button type="button" class="btn btn-sm btn-outline-primary mt-1"
+                        onclick="addDirective(this.previousElementSibling)">+ 添加指令</button>
+            </div>
+        `;
+        container.appendChild(rule);
+    }
+
+    function toggleProxyRule(header) {
+        const body = header.nextElementSibling;
+        body.style.display = body.style.display === 'none' ? '' : 'none';
+    }
+
+    function addDirective(container) {
         const row = document.createElement('div');
-        row.className = 'proxy-row';
+        row.className = 'proxy-directive';
         row.innerHTML = `
-            <input type="text" class="form-control form-control-sm proxy-path" placeholder="/api/" value="${path || ''}">
+            <input type="text" class="form-control form-control-sm dir-name" placeholder="指令名">
+            <input type="text" class="form-control form-control-sm dir-value" placeholder="值">
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
         `;
         container.appendChild(row);
@@ -220,9 +296,16 @@
 
     function getProxyRules() {
         const rules = [];
-        document.querySelectorAll('#proxyRulesContainer .proxy-row').forEach(row => {
-            const path = row.querySelector('.proxy-path').value.trim();
-            if (path) rules.push(path);
+        document.querySelectorAll('#proxyRulesContainer .proxy-rule').forEach(rule => {
+            const path = rule.querySelector('.proxy-rule-path').value.trim();
+            if (!path) return;
+            const directives = [];
+            rule.querySelectorAll('.proxy-directive').forEach(row => {
+                const name = row.querySelector('.dir-name').value.trim();
+                const value = row.querySelector('.dir-value').value.trim();
+                if (name) directives.push({ name, value });
+            });
+            rules.push({ path, directives });
         });
         return rules;
     }
@@ -317,22 +400,20 @@
     }
 
     function generateNginxConfPreview(proxyTarget, proxyRules) {
-        const t = proxyTarget.endsWith('/') ? proxyTarget.slice(0, -1) : proxyTarget;
-
         let proxyBlocks = '';
         if (proxyRules && proxyRules.length) {
-            for (const rawPath of proxyRules) {
-                let path = rawPath || '';
+            for (const rule of proxyRules) {
+                let path = rule.path || '';
                 if (!path) continue;
                 if (!path.startsWith('/')) path = '/' + path;
                 if (!path.endsWith('/')) path = path + '/';
                 proxyBlocks += `\n    # 反向代理: ${path}`;
                 proxyBlocks += `\n    location ${path} {`;
-                proxyBlocks += `\n        proxy_pass ${t}${path};`;
-                proxyBlocks += `\n        proxy_set_header Host $host;`;
-                proxyBlocks += `\n        proxy_set_header X-Real-IP $remote_addr;`;
-                proxyBlocks += `\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`;
-                proxyBlocks += `\n        proxy_set_header X-Forwarded-Proto $scheme;`;
+                if (rule.directives && rule.directives.length) {
+                    for (const d of rule.directives) {
+                        proxyBlocks += `\n        ${d.name} ${d.value};`;
+                    }
+                }
                 proxyBlocks += `\n    }`;
             }
         }
@@ -437,8 +518,8 @@
             document.getElementById('frontendBaseImage').value = config.frontend.baseImage || 'nginx:alpine';
             document.getElementById('frontendBackendUrl').value = config.frontend.backendUrl || '';
             if (config.frontend.proxyRules) {
-                for (const path of config.frontend.proxyRules) {
-                    addProxyRule(path);
+                for (const rule of config.frontend.proxyRules) {
+                    addProxyRule(rule.path, rule.directives);
                 }
             }
             if (config.frontend.customNginxConfig) {
