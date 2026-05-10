@@ -30,9 +30,9 @@ public class ServiceMgmtService {
         DeployService service = new DeployService();
         service.setName((String) params.get("name"));
         service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
+        service.setServiceType((String) params.get("serviceType"));
+        service.setServiceConfig((String) params.get("serviceConfig"));
         service.setVolumeDir(storagePath + "/" + service.getName());
-        service.setDockerfile((String) params.get("dockerfile"));
-        service.setDockerCompose((String) params.get("dockerCompose"));
         service.setStatus("stopped");
         serviceMapper.insert(service);
 
@@ -51,11 +51,11 @@ public class ServiceMgmtService {
         if (params.containsKey("port")) {
             service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
         }
-        if (params.containsKey("dockerfile")) {
-            service.setDockerfile((String) params.get("dockerfile"));
+        if (params.containsKey("serviceType")) {
+            service.setServiceType((String) params.get("serviceType"));
         }
-        if (params.containsKey("dockerCompose")) {
-            service.setDockerCompose((String) params.get("dockerCompose"));
+        if (params.containsKey("serviceConfig")) {
+            service.setServiceConfig((String) params.get("serviceConfig"));
         }
         serviceMapper.updateById(service);
     }

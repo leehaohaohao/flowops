@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS deploy_service (
     name VARCHAR(100) NOT NULL UNIQUE,
     port INT NOT NULL,
     volume_dir VARCHAR(255),
-    dockerfile TEXT,
-    docker_compose TEXT,
+    service_type VARCHAR(20) NOT NULL DEFAULT 'backend',
+    service_config TEXT,
     status VARCHAR(20) DEFAULT 'stopped',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

@@ -10,6 +10,7 @@
             <tr>
                 <th>ID</th>
                 <th>服务名</th>
+                <th>类型</th>
                 <th>端口</th>
                 <th>状态</th>
                 <th>操作</th>
@@ -19,6 +20,8 @@
     </table>
 
     <script>
+    const typeLabels = {backend: '纯后端', frontend: '纯前端', fullstack: '前后端一体'};
+
     async function loadServices() {
         const res = await api('/api/services/list');
         if (res.code === 200) {
@@ -26,6 +29,7 @@
                 <tr>
                     <td>${s.id}</td>
                     <td>${s.name}</td>
+                    <td><span class="badge bg-info">${typeLabels[s.serviceType] || s.serviceType || '后端'}</span></td>
                     <td>${s.port}</td>
                     <td><span class="badge bg-${s.status === 'running' ? 'success' : 'secondary'}">${s.status}</span></td>
                     <td>
