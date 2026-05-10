@@ -236,7 +236,7 @@
         const backendTarget = getBackendTarget();
         return [
             { name: 'proxy_pass', value: backendTarget + path },
-            { name: 'proxy_set_header', value: 'Host $host' },
+            { name: 'proxy_set_header', value: 'Host $http_host' },
             { name: 'proxy_set_header', value: 'X-Real-IP $remote_addr' },
             { name: 'proxy_set_header', value: 'X-Forwarded-For $proxy_add_x_forwarded_for' },
             { name: 'proxy_set_header', value: 'X-Forwarded-Proto $scheme' }
