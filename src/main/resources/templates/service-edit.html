@@ -267,6 +267,8 @@
                 <div class="mb-2">
                     <label class="form-label mb-1"><small>路径</small></label>
                     <input type="text" class="form-control form-control-sm proxy-rule-path" value="${displayPath}"
+                           placeholder="如 api 或 /api/"
+                           onblur="normalizeProxyPath(this)"
                            onchange="this.closest('.proxy-rule').querySelector('.proxy-path-display').textContent = this.value">
                 </div>
                 <label class="form-label mb-1"><small>指令</small></label>
@@ -276,6 +278,17 @@
             </div>
         `;
         container.appendChild(rule);
+    }
+
+    // 自动补全路径的开头和末尾斜杠
+    function normalizeProxyPath(input) {
+        let v = input.value.trim();
+        if (!v) return;
+        if (!v.startsWith('/')) v = '/' + v;
+        if (!v.endsWith('/')) v = v + '/';
+        input.value = v;
+        // 同步更新标题栏显示
+        input.closest('.proxy-rule').querySelector('.proxy-path-display').textContent = v;
     }
 
     function toggleProxyRule(header) {
