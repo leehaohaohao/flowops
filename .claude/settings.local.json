@@ -7,7 +7,11 @@
       "Bash(java:*)",
       "Bash(mv:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grep -l \"sa-token\" src/main/resources/application*.yml)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(sort -k2)"
     ]
   }
 }
