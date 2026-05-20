@@ -614,6 +614,28 @@ public class DeployExecutorService {
         }
     }
 
+    /**
+     * 获取指定服务的容器运行日志（REST API 用）
+     */
+    public String getContainerLogs(Long serviceId, int tail) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        if (service == null) {
+            return "服务不存在";
+        }
+        try {
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+                    "docker", "compose", "logs", "--tail", String.valueOf(tail), "--no-color", service.getName()
+            );
+            pb.directory(new File(service.getVolumeDir()));
+            Process proc = pb.start();
+            String output = readProcessOutput(proc);
+            proc.waitFor();
+            return output.isEmpty() ? "暂无日志" : output;
+        } catch (Exception e) {
+            return "获取容器日志失败: " + e.getMessage();
+        }
+    }
+
     // ==================== 工具方法 ====================
 
     private String readProcessOutput(Process process) throws IOException {

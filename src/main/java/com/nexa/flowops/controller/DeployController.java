@@ -72,4 +72,12 @@ public class DeployController {
     public Result<Map<String, Object>> status(@PathVariable Long serviceId) {
         return deployService.getContainerStatus(serviceId);
     }
+
+    @GetMapping("/logs/{serviceId}")
+    public Result<String> containerLogs(
+            @PathVariable Long serviceId,
+            @RequestParam(defaultValue = "500") int tail) {
+        String logs = deployService.getContainerLogs(serviceId, tail);
+        return Result.ok(logs);
+    }
 }

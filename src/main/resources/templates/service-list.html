@@ -34,6 +34,7 @@
                     <td><span class="badge bg-${s.status === 'running' ? 'success' : 'secondary'}">${s.status}</span></td>
                     <td>
                         <button class="btn btn-sm btn-info" onclick="location.href='/services/${s.id}'">编辑</button>
+                        <button class="btn btn-sm btn-dark" onclick="location.href='/services/${s.id}/logs'">日志</button>
                         <button class="btn btn-sm btn-success" onclick="deploy(${s.id})">部署</button>
                         <button class="btn btn-sm btn-warning" onclick="restart(${s.id})">重启</button>
                         <button class="btn btn-sm btn-secondary" onclick="stop(${s.id})">停止</button>

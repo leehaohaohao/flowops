@@ -48,6 +48,12 @@ public class PageController {
         return "deploy-logs";
     }
 
+    @GetMapping("/services/{id}/logs")
+    public String containerLogs(@PathVariable Long id, Model model) {
+        model.addAttribute("service", serviceMgmtService.getById(id));
+        return "container-logs";
+    }
+
     @GetMapping("/users")
     public String users() {
         return "user-list";

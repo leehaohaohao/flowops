@@ -81,6 +81,7 @@ docker run -d \
     --restart unless-stopped \
     -p "$PORT:8080" \
     -e "SPRING_PROFILES_ACTIVE=$PROFILE" \
+    -e "MYSQL_REMOTE=$MYSQL_REMOTE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR:/data/flowops" \
     "$IMAGE_NAME:latest"
