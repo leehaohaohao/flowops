@@ -28,7 +28,7 @@ sa-token:
   is-concurrent: true
   is-share: true
   token-style: jwt
-  jwt-secret-key: flowops2026SecretKeyForJwtSigning
+  jwt-secret-key: ${JWT_SECRET}
   is-stateless: true
   is-log: false
   is-read-cookie: true

@@ -36,6 +36,12 @@ build/
 #claude
 .claude
 
+### Env files ###
+.env
+.env.dev
+.env.prod
+.env.local
+
 ### VS Code ###
 .vscode/
 
