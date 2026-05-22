@@ -1,6 +1,7 @@
 package com.nexa.flowops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,12 @@ public class ServiceMgmtService {
         return serviceMapper.selectList(null);
     }
 
+    public List<DeployService> listByProjectIds(List<Long> projectIds) {
+        if (projectIds.isEmpty()) return List.of();
+        return serviceMapper.selectList(
+                new LambdaQueryWrapper<DeployService>().in(DeployService::getProjectId, projectIds));
+    }
+
     public DeployService getById(Long id) {
         return serviceMapper.selectById(id);
     }
@@ -33,7 +40,7 @@ public class ServiceMgmtService {
         Long count = serviceMapper.selectCount(
                 new LambdaQueryWrapper<DeployService>().eq(DeployService::getName, name));
         if (count > 0) {
-            throw new RuntimeException("服务名「" + name + "」已存在，请更换名称");
+            throw new BusinessException("服务名「" + name + "」已存在，请更换名称");
         }
 
         DeployService service = new DeployService();
@@ -41,6 +48,7 @@ public class ServiceMgmtService {
         service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
         service.setServiceType((String) params.get("serviceType"));
         service.setServiceConfig((String) params.get("serviceConfig"));
+        service.setProjectId(Long.parseLong(String.valueOf(params.get("projectId"))));
         service.setVolumeDir(storagePath + "/" + name);
         service.setStatus("stopped");
         serviceMapper.insert(service);

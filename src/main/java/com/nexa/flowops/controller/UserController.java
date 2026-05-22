@@ -11,7 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
-@SaCheckRole("admin")
+@SaCheckRole("super_admin")
 public class UserController {
 
     private final UserService userService;

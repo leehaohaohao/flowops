@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class DeployService {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long projectId;        // 所属项目 ID
     private String name;           // 服务名称
     private Integer port;          // 暴露端口
     private String volumeDir;      // 挂载目录

@@ -9,8 +9,15 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class SaTokenConfig implements WebMvcConfigurer {
 
+    private final PermissionInterceptor permissionInterceptor;
+
+    public SaTokenConfig(PermissionInterceptor permissionInterceptor) {
+        this.permissionInterceptor = permissionInterceptor;
+    }
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // Sa-Token 登录校验
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
                 .addPathPatterns("/**")
                 .excludePathPatterns(
@@ -21,5 +28,9 @@ public class SaTokenConfig implements WebMvcConfigurer {
                         "/css/**",
                         "/favicon.ico"
                 );
+
+        // 权限拦截器（仅拦截 API 请求）
+        registry.addInterceptor(permissionInterceptor)
+                .addPathPatterns("/api/**");
     }
 }

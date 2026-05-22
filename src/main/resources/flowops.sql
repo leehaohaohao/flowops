@@ -82,6 +82,7 @@ CREATE TABLE `sys_user`  (
 -- ----------------------------
 -- Records of sys_user
 -- ----------------------------
+-- 注意: 以下为开发环境默认账户，密码为明文，生产环境请修改密码并使用 BCrypt 加密
 INSERT INTO `sys_user` VALUES (1, 'admin', 'admin123', 'admin', '2026-05-08 17:13:50');
 
 SET FOREIGN_KEY_CHECKS = 1;

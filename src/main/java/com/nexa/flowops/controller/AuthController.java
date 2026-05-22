@@ -2,9 +2,14 @@ package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.entity.SysUser;
+import com.nexa.flowops.mapper.SysUserMapper;
 import com.nexa.flowops.service.AuthService;
+import com.nexa.flowops.service.PermissionService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -12,9 +17,14 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final SysUserMapper userMapper;
+    private final PermissionService permissionService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, SysUserMapper userMapper,
+                          PermissionService permissionService) {
         this.authService = authService;
+        this.userMapper = userMapper;
+        this.permissionService = permissionService;
     }
 
     @PostMapping("/login")
@@ -35,11 +45,26 @@ public class AuthController {
     }
 
     @GetMapping("/info")
-    public Result<Map<String, String>> info() {
-        Map<String, String> userInfo = Map.of(
-                "username", StpUtil.getLoginIdAsString(),
-                "role", StpUtil.hasRole("admin") ? "admin" : "user"
-        );
-        return Result.ok(userInfo);
+    public Result<Map<String, Object>> info() {
+        String username = StpUtil.getLoginIdAsString();
+        SysUser user = userMapper.selectByUsername(username);
+        if (user == null) {
+            return Result.fail(401, "用户不存在");
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("username", user.getUsername());
+        data.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
+
+        // 用户所属项目组
+        List<Map<String, Object>> groups = permissionService.getUserGroups(user.getId());
+        data.put("groups", groups);
+
+        // 按项目维度的权限（超级管理员不需要，前端通过 isSuperAdmin 判断）
+        if (user.getIsSuperAdmin() != 1) {
+            data.put("projectPermissions", permissionService.getProjectPermissions(user.getId()));
+        }
+
+        return Result.ok(data);
     }
 }

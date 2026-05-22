@@ -5,14 +5,14 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("sys_user")
-public class SysUser {
+@TableName("perm_role")
+public class PermRole {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String username;
-    private String password;
-    private String role;  // admin, user (legacy, 保留兼容)
-    private Integer isSuperAdmin;  // 1=超级管理员, 0=普通用户
+    private String name;
+    private Integer isPreset;  // 1=预设, 0=自定义
+    private Long groupId;      // 自定义角色所属项目组，预设角色为 null
+    private String description;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 }
