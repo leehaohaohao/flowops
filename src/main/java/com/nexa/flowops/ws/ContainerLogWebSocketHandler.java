@@ -15,6 +15,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -29,6 +31,11 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
 
     private final DeployServiceMapper serviceMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ExecutorService readerPool = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r);
+        t.setDaemon(true);
+        return t;
+    });
 
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> sessionFlags = new ConcurrentHashMap<>();
@@ -92,8 +99,8 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
 
             final AtomicBoolean flag = running;
 
-            // 独立线程读取并推送日志行
-            Thread readerThread = new Thread(() -> {
+            // 线程池读取并推送日志行
+            readerPool.submit(() -> {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream()))) {
                     sendJson(session, Map.of("type", "statusLine", "msg",
@@ -119,8 +126,6 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
                     log.info("[{}] 容器日志流结束: {}", serviceName, sessionId);
                 }
             }, "container-log-" + sessionId);
-            readerThread.setDaemon(true);
-            readerThread.start();
 
         } catch (Exception e) {
             log.error("[{}] 处理容器日志请求失败", sessionId, e);

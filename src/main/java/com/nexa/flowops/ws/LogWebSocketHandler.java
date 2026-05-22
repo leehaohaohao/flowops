@@ -2,6 +2,7 @@ package com.nexa.flowops.ws;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -11,10 +12,7 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 实时日志 WebSocket 推送
@@ -25,8 +23,12 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(LogWebSocketHandler.class);
 
     private final String logBasePath = "/data/flowops/services/logs";
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
+    private final ThreadPoolTaskScheduler taskScheduler;
     private final ConcurrentHashMap<String, ScheduledFuture<?>> watchTasks = new ConcurrentHashMap<>();
+
+    public LogWebSocketHandler(ThreadPoolTaskScheduler taskScheduler) {
+        this.taskScheduler = taskScheduler;
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -54,7 +56,7 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
 
         // 启动增量监看：每 2 秒检查文件是否追加了新内容
         long[] lastSize = {Files.size(filePath)};
-        ScheduledFuture<?> task = scheduler.scheduleWithFixedDelay(() -> {
+        ScheduledFuture<?> task = taskScheduler.scheduleWithFixedDelay(() -> {
             try {
                 if (!session.isOpen()) {
                     cancelWatch(session.getId());
@@ -75,7 +77,7 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 log.warn("[{}] 日志监看异常: {}", session.getId(), e.getMessage());
             }
-        }, 2, 2, TimeUnit.SECONDS);
+        }, 2000);
 
         watchTasks.put(session.getId(), task);
     }
