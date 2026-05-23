@@ -21,12 +21,17 @@ public class SaTokenConfig implements WebMvcConfigurer {
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
                 .addPathPatterns("/**")
                 .excludePathPatterns(
+                        "/",
+                        "/index.html",
                         "/login",
                         "/auth/**",
                         "/error",
+                        "/assets/**",
                         "/js/**",
                         "/css/**",
-                        "/favicon.ico"
+                        "/favicon.ico",
+                        "/favicon.svg",
+                        "/icons.svg"
                 );
 
         // 权限拦截器（仅拦截 API 请求）
