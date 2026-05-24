@@ -40,6 +40,7 @@
       "description": "系统默认项目",
       "isDefault": 1,
       "memberCount": 3,
+      "serviceCount": 5,
       "createTime": "2026-05-08T17:13:50"
     }
   ]
@@ -184,5 +185,5 @@
 - [ ] `GET /api/projects` 移除 `?groupId` 参数，适配新返回字段
 - [ ] `POST /api/projects` 请求体移除 `groupId`
 - [ ] `GET /api/auth/info` 中 `data.groups` → `data.projects`
-- [ ] 项目列表页面展示 `isDefault` 标记和 `memberCount`
+- [ ] 项目列表页面展示 `isDefault` 标记、`memberCount` 和 `serviceCount`
 - [ ] 默认项目不可删除（`isDefault=1` 时隐藏删除按钮）
