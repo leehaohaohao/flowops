@@ -39,22 +39,10 @@ public class UserController {
         this.projectService = projectService;
     }
 
+    @SaCheckRole("super_admin")
     @GetMapping("/list")
     public Result<List<UserVO>> list() {
-        SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
-        List<SysUser> users;
-        if (currentUser.getIsSuperAdmin() == 1) {
-            users = userService.list();
-        } else {
-            List<Long> projectIds = permissionService.getVisibleProjectIds(currentUser.getId())
-                    .stream()
-                    .filter(pid -> permissionService.getEffectivePermissions(currentUser.getId(), pid).contains("MANAGE_MEMBERS"))
-                    .toList();
-            if (projectIds.isEmpty()) {
-                return Result.ok(List.of());
-            }
-            users = userService.listByProjectIds(projectIds);
-        }
+        List<SysUser> users = userService.list();
 
         List<UserVO> result = new ArrayList<>();
         for (SysUser user : users) {
