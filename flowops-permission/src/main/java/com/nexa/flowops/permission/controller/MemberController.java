@@ -4,6 +4,7 @@ import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.AddMemberRequest;
+import com.nexa.flowops.permission.dto.MemberVO;
 import com.nexa.flowops.permission.dto.UpdateMemberRoleRequest;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
@@ -12,7 +13,6 @@ import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects/{projectId}/members")
@@ -28,7 +28,7 @@ public class MemberController {
 
     @RequireProjectSupervisor("projectId")
     @GetMapping
-    public Result<List<Map<String, Object>>> list(@PathVariable Long projectId) {
+    public Result<List<MemberVO>> list(@PathVariable Long projectId) {
         return Result.ok(memberService.listMembers(projectId));
     }
 
@@ -63,6 +63,10 @@ public class MemberController {
     @RequireProjectSupervisor("projectId")
     @DeleteMapping("/{userId}")
     public Result<Void> remove(@PathVariable Long projectId, @PathVariable Long userId) {
+        SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        if (currentUser != null && currentUser.getId().equals(userId)) {
+            return Result.fail("不能移除自己");
+        }
         memberService.removeMember(projectId, userId);
         return Result.ok("移除成功");
     }

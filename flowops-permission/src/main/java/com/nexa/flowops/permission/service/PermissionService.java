@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.permission.entity.*;
 import com.nexa.flowops.permission.mapper.*;
 import com.nexa.flowops.permission.ExternalDataProvider;
+import com.nexa.flowops.permission.dto.ProjectBriefVO;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -153,22 +154,22 @@ public class PermissionService {
     /**
      * 获取用户所属的项目信息
      */
-    public List<Map<String, Object>> getUserProjects(Long userId) {
+    public List<ProjectBriefVO> getUserProjects(Long userId) {
         List<GroupMember> memberships = groupMemberMapper.selectList(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getUserId, userId));
-        List<Map<String, Object>> projects = new ArrayList<>();
+        List<ProjectBriefVO> projects = new ArrayList<>();
         for (GroupMember member : memberships) {
             Project project = projectMapper.selectById(member.getProjectId());
             if (project == null) continue;
             PermRole role = permRoleMapper.selectById(member.getRoleId());
-            Map<String, Object> info = new HashMap<>();
-            info.put("id", project.getId());
-            info.put("name", project.getName());
-            info.put("roleName", role != null ? role.getName() : "unknown");
+            ProjectBriefVO vo = new ProjectBriefVO();
+            vo.setId(project.getId());
+            vo.setName(project.getName());
+            vo.setRoleName(role != null ? role.getName() : "unknown");
             if (member.getExtraPermissions() != null && !member.getExtraPermissions().isEmpty()) {
-                info.put("extraPermissions", List.of(member.getExtraPermissions().split(",")));
+                vo.setExtraPermissions(List.of(member.getExtraPermissions().split(",")));
             }
-            projects.add(info);
+            projects.add(vo);
         }
         return projects;
     }

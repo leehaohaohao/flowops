@@ -10,6 +10,8 @@ import com.nexa.flowops.permission.mapper.PermRoleMapper;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import org.springframework.stereotype.Service;
 
+import com.nexa.flowops.permission.dto.MemberVO;
+
 import java.util.*;
 
 @Service
@@ -27,20 +29,21 @@ public class MemberService {
         this.permRoleMapper = permRoleMapper;
     }
 
-    public List<Map<String, Object>> listMembers(Long projectId) {
+    public List<MemberVO> listMembers(Long projectId) {
         List<GroupMember> members = groupMemberMapper.selectList(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getProjectId, projectId));
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<MemberVO> result = new ArrayList<>();
         for (GroupMember member : members) {
             SysUser user = userMapper.selectById(member.getUserId());
             PermRole role = permRoleMapper.selectById(member.getRoleId());
             if (user == null) continue;
-            Map<String, Object> info = new HashMap<>();
-            info.put("userId", user.getId());
-            info.put("username", user.getUsername());
-            info.put("roleId", member.getRoleId());
-            info.put("roleName", role != null ? role.getName() : "unknown");
-            result.add(info);
+            MemberVO vo = new MemberVO();
+            vo.setUserId(user.getId());
+            vo.setUsername(user.getUsername());
+            vo.setRoleId(member.getRoleId());
+            vo.setRoleName(role != null ? role.getName() : "unknown");
+            vo.setJoinTime(member.getCreateTime());
+            result.add(vo);
         }
         return result;
     }

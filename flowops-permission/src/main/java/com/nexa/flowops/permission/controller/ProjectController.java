@@ -4,6 +4,7 @@ import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.CreateProjectRequest;
+import com.nexa.flowops.permission.dto.ProjectDetailVO;
 import com.nexa.flowops.permission.dto.UpdateProjectRequest;
 import com.nexa.flowops.permission.entity.Project;
 import com.nexa.flowops.permission.entity.SysUser;
@@ -40,7 +41,7 @@ public class ProjectController {
     }
 
     @GetMapping
-    public Result<List<Map<String, Object>>> list() {
+    public Result<List<ProjectDetailVO>> list() {
         SysUser user = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         List<Project> projects;
         if (user.getIsSuperAdmin() == 1) {
@@ -48,33 +49,33 @@ public class ProjectController {
         } else {
             projects = projectService.listByIds(permissionService.getVisibleProjectIds(user.getId()));
         }
-        List<Map<String, Object>> result = projects.stream().map(p -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", p.getId());
-            map.put("name", p.getName());
-            map.put("description", p.getDescription());
-            map.put("isDefault", p.getIsDefault());
-            map.put("memberCount", projectService.getMemberCount(p.getId()));
-            map.put("serviceCount", projectService.getServiceCount(p.getId()));
-            map.put("createTime", p.getCreateTime());
-            return map;
+        List<ProjectDetailVO> result = projects.stream().map(p -> {
+            ProjectDetailVO vo = new ProjectDetailVO();
+            vo.setId(p.getId());
+            vo.setName(p.getName());
+            vo.setDescription(p.getDescription());
+            vo.setIsDefault(p.getIsDefault());
+            vo.setMemberCount(projectService.getMemberCount(p.getId()));
+            vo.setServiceCount(projectService.getServiceCount(p.getId()));
+            vo.setCreateTime(p.getCreateTime());
+            return vo;
         }).toList();
         return Result.ok(result);
     }
 
     @GetMapping("/{id}")
-    public Result<Map<String, Object>> getById(@PathVariable Long id) {
+    public Result<ProjectDetailVO> getById(@PathVariable Long id) {
         Project project = projectService.getById(id);
         if (project == null) return Result.fail("项目不存在");
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", project.getId());
-        data.put("name", project.getName());
-        data.put("description", project.getDescription());
-        data.put("isDefault", project.getIsDefault());
-        data.put("memberCount", projectService.getMemberCount(id));
-        data.put("serviceCount", projectService.getServiceCount(id));
-        data.put("createTime", project.getCreateTime());
-        return Result.ok(data);
+        ProjectDetailVO vo = new ProjectDetailVO();
+        vo.setId(project.getId());
+        vo.setName(project.getName());
+        vo.setDescription(project.getDescription());
+        vo.setIsDefault(project.getIsDefault());
+        vo.setMemberCount(projectService.getMemberCount(id));
+        vo.setServiceCount(projectService.getServiceCount(id));
+        vo.setCreateTime(project.getCreateTime());
+        return Result.ok(vo);
     }
 
     @RequireProjectSupervisor("id")

@@ -6,6 +6,7 @@ import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.dto.ProjectRoleAssignment;
+import com.nexa.flowops.permission.dto.UserVO;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
@@ -14,9 +15,7 @@ import com.nexa.flowops.permission.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -37,31 +36,30 @@ public class UserController {
     }
 
     @GetMapping("/list")
-    public Result<List<Map<String, Object>>> list() {
+    public Result<List<UserVO>> list() {
         SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         List<SysUser> users;
         if (currentUser.getIsSuperAdmin() == 1) {
             users = userService.list();
         } else {
-            // 主管看自己项目的用户（去重）
             List<Long> projectIds = permissionService.getUserProjects(currentUser.getId())
-                    .stream().filter(g -> "supervisor".equals(g.get("roleName")))
-                    .map(g -> (Long) g.get("id")).toList();
+                    .stream().filter(g -> "supervisor".equals(g.getRoleName()))
+                    .map(g -> g.getId()).toList();
             if (projectIds.isEmpty()) {
                 return Result.ok(List.of());
             }
             users = userService.listByProjectIds(projectIds);
         }
 
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<UserVO> result = new ArrayList<>();
         for (SysUser user : users) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", user.getId());
-            map.put("username", user.getUsername());
-            map.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
-            map.put("createTime", user.getCreateTime());
-            map.put("projects", permissionService.getUserProjects(user.getId()));
-            result.add(map);
+            UserVO vo = new UserVO();
+            vo.setId(user.getId());
+            vo.setUsername(user.getUsername());
+            vo.setSuperAdmin(user.getIsSuperAdmin() == 1);
+            vo.setCreateTime(user.getCreateTime());
+            vo.setProjects(permissionService.getUserProjects(user.getId()));
+            result.add(vo);
         }
         return Result.ok(result);
     }

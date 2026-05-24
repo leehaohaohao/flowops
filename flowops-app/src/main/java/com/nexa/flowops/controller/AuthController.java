@@ -55,7 +55,7 @@ public class AuthController {
         data.put("username", user.getUsername());
         data.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
 
-        List<Map<String, Object>> projects = permissionService.getUserProjects(user.getId());
+        List<?> projects = permissionService.getUserProjects(user.getId());
         data.put("projects", projects);
 
         if (user.getIsSuperAdmin() != 1) {
