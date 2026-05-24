@@ -30,25 +30,31 @@ public class DotenvPostProcessor implements EnvironmentPostProcessor, Ordered {
         String[] profiles = environment.getActiveProfiles();
         String envFile = profiles.length > 0 ? ".env." + profiles[0] : ".env";
 
-        if (!new File(envFile).exists()) {
-            log.info("未找到 {}，跳过加载", envFile);
+        File file = new File(envFile);
+        log.info("[Dotenv] 查找 {}，工作目录: {}，绝对路径: {}，存在: {}",
+                envFile, System.getProperty("user.dir"), file.getAbsolutePath(), file.exists());
+
+        if (!file.exists()) {
+            log.warn("[Dotenv] 未找到 {}，跳过加载", envFile);
             return;
         }
 
-        Dotenv dotenv = Dotenv.configure()
-                .directory(".")
-                .filename(envFile)
-                .ignoreIfMissing()
-                .load();
+        try {
+            Dotenv dotenv = Dotenv.configure()
+                    .directory(".")
+                    .filename(envFile)
+                    .ignoreIfMissing()
+                    .load();
 
-        Map<String, Object> props = new HashMap<>();
-        dotenv.entries().forEach(entry -> props.put(entry.getKey(), entry.getValue()));
+            Map<String, Object> props = new HashMap<>();
+            dotenv.entries().forEach(entry -> props.put(entry.getKey(), entry.getValue()));
 
-        // addLast: 此时系统属性/环境变量已加载，addLast 放在它们之后
-        // 后续 yml 会被 ConfigDataEnvironmentPostProcessor 加在更后面
-        environment.getPropertySources()
-                .addLast(new MapPropertySource("dotenv-" + envFile, props));
+            environment.getPropertySources()
+                    .addLast(new MapPropertySource("dotenv-" + envFile, props));
 
-        log.info("已加载 {} 中的 {} 个变量", envFile, props.size());
+            log.info("[Dotenv] 已加载 {} 中的 {} 个变量", envFile, props.size());
+        } catch (Exception e) {
+            log.error("[Dotenv] 加载 {} 失败", envFile, e);
+        }
     }
 }
