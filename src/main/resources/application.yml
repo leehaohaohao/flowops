@@ -22,7 +22,7 @@ mybatis-plus:
 
 # Sa-Token 配置
 sa-token:
-  token-name: satoken
+  token-name: Authorization
   timeout: 86400
   active-timeout: -1
   is-concurrent: true
