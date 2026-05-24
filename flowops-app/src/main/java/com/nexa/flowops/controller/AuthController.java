@@ -2,16 +2,13 @@ package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.UserInfoVO;
 import com.nexa.flowops.dto.LoginRequest;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.service.AuthService;
 import com.nexa.flowops.permission.service.PermissionService;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -44,24 +41,22 @@ public class AuthController {
     }
 
     @GetMapping("/info")
-    public Result<Map<String, Object>> info() {
+    public Result<UserInfoVO> info() {
         String username = StpUtil.getLoginIdAsString();
         SysUser user = userMapper.selectByUsername(username);
         if (user == null) {
             return Result.fail(401, "用户不存在");
         }
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("username", user.getUsername());
-        data.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
-
-        List<?> projects = permissionService.getUserProjects(user.getId());
-        data.put("projects", projects);
+        UserInfoVO vo = new UserInfoVO();
+        vo.setUsername(user.getUsername());
+        vo.setSuperAdmin(user.getIsSuperAdmin() == 1);
+        vo.setProjects(permissionService.getUserProjects(user.getId()));
 
         if (user.getIsSuperAdmin() != 1) {
-            data.put("projectPermissions", permissionService.getProjectPermissions(user.getId()));
+            vo.setProjectPermissions(permissionService.getProjectPermissions(user.getId()));
         }
 
-        return Result.ok(data);
+        return Result.ok(vo);
     }
 }

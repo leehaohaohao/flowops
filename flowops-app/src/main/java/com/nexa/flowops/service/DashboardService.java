@@ -2,6 +2,7 @@ package com.nexa.flowops.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.nexa.flowops.dto.DashboardStatsVO;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.permission.entity.SysUser;
@@ -11,9 +12,7 @@ import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class DashboardService {
@@ -33,27 +32,25 @@ public class DashboardService {
         this.userMapper = userMapper;
     }
 
-    public Map<String, Object> getStats() {
+    public DashboardStatsVO getStats() {
         SysUser user = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         List<Long> visibleProjectIds = permissionService.getVisibleProjectIds(user.getId());
 
-        Map<String, Object> stats = new HashMap<>();
+        DashboardStatsVO stats = new DashboardStatsVO();
 
-        // 按可见项目过滤的服务统计
         if (visibleProjectIds.isEmpty()) {
-            stats.put("totalServices", 0);
-            stats.put("runningServices", 0);
+            stats.setTotalServices(0L);
+            stats.setRunningServices(0L);
         } else {
-            stats.put("totalServices", serviceMapper.selectCount(
+            stats.setTotalServices(serviceMapper.selectCount(
                     new LambdaQueryWrapper<DeployService>().in(DeployService::getProjectId, visibleProjectIds)));
-            stats.put("runningServices", serviceMapper.selectCount(
+            stats.setRunningServices(serviceMapper.selectCount(
                     new LambdaQueryWrapper<DeployService>()
                             .in(DeployService::getProjectId, visibleProjectIds)
                             .eq(DeployService::getStatus, "running")));
         }
 
-        // 部署总次数（全局，不过滤）
-        stats.put("totalDeploys", recordMapper.selectCount(null));
+        stats.setTotalDeploys(recordMapper.selectCount(null));
 
         return stats;
     }

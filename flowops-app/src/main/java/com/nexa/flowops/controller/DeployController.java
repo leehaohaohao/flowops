@@ -2,12 +2,12 @@ package com.nexa.flowops.controller;
 
 import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.service.DeployExecutorService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/deploy")
@@ -76,7 +76,7 @@ public class DeployController {
 
     @RequirePermission("VIEW")
     @GetMapping("/status/{serviceId}")
-    public Result<Map<String, Object>> status(@PathVariable Long serviceId) {
+    public Result<ContainerStatusVO> status(@PathVariable Long serviceId) {
         return deployService.getContainerStatus(serviceId);
     }
 

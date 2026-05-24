@@ -1,6 +1,7 @@
 package com.nexa.flowops.service;
 
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployRecordMapper;
@@ -505,10 +506,13 @@ public class DeployExecutorService {
         }
     }
 
-    public Result<Map<String, Object>> getContainerStatus(Long serviceId) {
+    public Result<ContainerStatusVO> getContainerStatus(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         boolean running = dockerUtil.isContainerRunning(service.getName());
-        return Result.ok(Map.of("running", running, "status", running ? "running" : "stopped"));
+        ContainerStatusVO vo = new ContainerStatusVO();
+        vo.setRunning(running);
+        vo.setStatus(running ? "running" : "stopped");
+        return Result.ok(vo);
     }
 
     // ==================== 部署健康检查 ====================
