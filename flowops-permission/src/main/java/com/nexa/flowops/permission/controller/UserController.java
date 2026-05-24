@@ -12,7 +12,10 @@ import com.nexa.flowops.permission.service.ProjectService;
 import com.nexa.flowops.permission.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -33,19 +36,33 @@ public class UserController {
     }
 
     @GetMapping("/list")
-    public Result<List<SysUser>> list() {
-        SysUser user = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
-        if (user.getIsSuperAdmin() == 1) {
-            return Result.ok(userService.list());
+    public Result<List<Map<String, Object>>> list() {
+        SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        List<SysUser> users;
+        if (currentUser.getIsSuperAdmin() == 1) {
+            users = userService.list();
+        } else {
+            // 主管看自己项目的用户（去重）
+            List<Long> projectIds = permissionService.getUserProjects(currentUser.getId())
+                    .stream().filter(g -> (boolean) g.get("isSupervisor"))
+                    .map(g -> (Long) g.get("id")).toList();
+            if (projectIds.isEmpty()) {
+                return Result.ok(List.of());
+            }
+            users = userService.listByProjectIds(projectIds);
         }
-        // 主管看自己项目的用户（去重）
-        List<Long> projectIds = permissionService.getUserProjects(user.getId())
-                .stream().filter(g -> (boolean) g.get("isSupervisor"))
-                .map(g -> (Long) g.get("id")).toList();
-        if (projectIds.isEmpty()) {
-            return Result.ok(List.of());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (SysUser user : users) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", user.getId());
+            map.put("username", user.getUsername());
+            map.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
+            map.put("createTime", user.getCreateTime());
+            map.put("projects", permissionService.getUserProjects(user.getId()));
+            result.add(map);
         }
-        return Result.ok(userService.listByProjectIds(projectIds));
+        return Result.ok(result);
     }
 
     @PostMapping("/create")
