@@ -55,6 +55,7 @@ public class ProjectController {
             map.put("description", p.getDescription());
             map.put("isDefault", p.getIsDefault());
             map.put("memberCount", projectService.getMemberCount(p.getId()));
+            map.put("serviceCount", projectService.getServiceCount(p.getId()));
             map.put("createTime", p.getCreateTime());
             return map;
         }).toList();
@@ -71,6 +72,7 @@ public class ProjectController {
         data.put("description", project.getDescription());
         data.put("isDefault", project.getIsDefault());
         data.put("memberCount", projectService.getMemberCount(id));
+        data.put("serviceCount", projectService.getServiceCount(id));
         data.put("createTime", project.getCreateTime());
         return Result.ok(data);
     }

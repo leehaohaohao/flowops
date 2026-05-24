@@ -80,4 +80,8 @@ public class ProjectService {
         return groupMemberMapper.selectCount(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getProjectId, projectId));
     }
+
+    public long getServiceCount(Long projectId) {
+        return externalDataProvider.countServicesByProjectId(projectId);
+    }
 }
