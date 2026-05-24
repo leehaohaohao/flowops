@@ -1,7 +1,7 @@
 package com.nexa.flowops.permission.controller;
 
 import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.RequireProjectSupervisor;
+import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.AddMemberRequest;
 import com.nexa.flowops.permission.dto.MemberVO;
@@ -26,13 +26,13 @@ public class MemberController {
         this.userMapper = userMapper;
     }
 
-    @RequireProjectSupervisor("projectId")
+    @RequirePermission(value = "MANAGE_MEMBERS", projectId = "projectId")
     @GetMapping
     public Result<List<MemberVO>> list(@PathVariable Long projectId) {
         return Result.ok(memberService.listMembers(projectId));
     }
 
-    @RequireProjectSupervisor("projectId")
+    @RequirePermission(value = "MANAGE_MEMBERS", projectId = "projectId")
     @PostMapping
     public Result<Void> add(@PathVariable Long projectId, @RequestBody AddMemberRequest req) {
         try {
@@ -43,7 +43,7 @@ public class MemberController {
         }
     }
 
-    @RequireProjectSupervisor("projectId")
+    @RequirePermission(value = "MANAGE_MEMBERS", projectId = "projectId")
     @PutMapping("/{userId}")
     public Result<Void> updateRole(@PathVariable Long projectId,
                                    @PathVariable Long userId,
@@ -60,7 +60,7 @@ public class MemberController {
         }
     }
 
-    @RequireProjectSupervisor("projectId")
+    @RequirePermission(value = "MANAGE_MEMBERS", projectId = "projectId")
     @DeleteMapping("/{userId}")
     public Result<Void> remove(@PathVariable Long projectId, @PathVariable Long userId) {
         SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());

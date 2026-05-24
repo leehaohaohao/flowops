@@ -169,11 +169,10 @@ public class PermissionInterceptor implements HandlerInterceptor {
         if (!matcher.find()) return true;
 
         Long projectId = Long.parseLong(matcher.group(1));
-        if (!permissionService.isSupervisor(userId, projectId)) {
-            writeForbidden(response);
-            return false;
-        }
-        return true;
+        if (permissionService.getEffectivePermissions(userId, projectId).contains("MANAGE_MEMBERS")) return true;
+
+        writeForbidden(response);
+        return false;
     }
 
     private boolean checkProjectManagement(String method, String uri, Long userId,

@@ -73,7 +73,7 @@ public class UserController {
         // 非超管需要校验每个项目的 supervisor 权限
         if (!isSuperAdmin && req.getProjects() != null) {
             for (ProjectRoleAssignment assignment : req.getProjects()) {
-                if (!permissionService.isSupervisor(operator.getId(), assignment.getProjectId())) {
+                if (!permissionService.getEffectivePermissions(operator.getId(), assignment.getProjectId()).contains("MANAGE_MEMBERS")) {
                     return Result.fail(403, "只能创建用户到自己管理的项目（projectId=" + assignment.getProjectId() + "）");
                 }
             }
@@ -95,7 +95,7 @@ public class UserController {
         // 非超管需要校验每个项目的 supervisor 权限
         if (!isSuperAdmin && req.getProjects() != null) {
             for (ProjectRoleAssignment assignment : req.getProjects()) {
-                if (!permissionService.isSupervisor(operator.getId(), assignment.getProjectId())) {
+                if (!permissionService.getEffectivePermissions(operator.getId(), assignment.getProjectId()).contains("MANAGE_MEMBERS")) {
                     return Result.fail(403, "只能管理自己负责的项目（projectId=" + assignment.getProjectId() + "）");
                 }
             }

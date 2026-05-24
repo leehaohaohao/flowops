@@ -1,7 +1,7 @@
 package com.nexa.flowops.permission.controller;
 
 import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.RequireProjectSupervisor;
+import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.CreateProjectRequest;
 import com.nexa.flowops.permission.dto.ProjectDetailVO;
@@ -78,14 +78,14 @@ public class ProjectController {
         return Result.ok(vo);
     }
 
-    @RequireProjectSupervisor("id")
+    @RequirePermission(value = "MANAGE_PROJECTS", projectId = "id")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @RequestBody UpdateProjectRequest req) {
         projectService.update(id, req.getName(), req.getDescription());
         return Result.ok("更新成功");
     }
 
-    @RequireProjectSupervisor("id")
+    @RequirePermission(value = "MANAGE_PROJECTS", projectId = "id")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {
