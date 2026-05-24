@@ -102,14 +102,18 @@ public class UserController {
     }
 
     @GetMapping("/assignable")
-    public Result<AssignableVO> assignable(@RequestParam Long projectId) {
+    public Result<AssignableVO> assignable(@RequestParam(required = false) Long projectId) {
         SysUser operator = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         boolean isSuperAdmin = operator.getIsSuperAdmin() == 1;
 
-        // 非超管需要有该项目的 MANAGE_MEMBERS 权限
-        if (!isSuperAdmin
-                && !permissionService.getEffectivePermissions(operator.getId(), projectId).contains("MANAGE_MEMBERS")) {
-            return Result.fail(403, "权限不足");
+        // 非超管必须传 projectId 且有 MANAGE_MEMBERS 权限
+        if (!isSuperAdmin) {
+            if (projectId == null) {
+                return Result.fail(400, "缺少 projectId");
+            }
+            if (!permissionService.getEffectivePermissions(operator.getId(), projectId).contains("MANAGE_MEMBERS")) {
+                return Result.fail(403, "权限不足");
+            }
         }
 
         Set<String> allPerms = permissionService.getAllPermissionCodes();
