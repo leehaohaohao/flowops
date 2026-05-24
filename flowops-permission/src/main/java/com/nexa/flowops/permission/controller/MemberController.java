@@ -5,7 +5,10 @@ import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.AddMemberRequest;
 import com.nexa.flowops.permission.dto.UpdateMemberRoleRequest;
+import com.nexa.flowops.permission.entity.SysUser;
+import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.MemberService;
+import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,9 +19,11 @@ import java.util.Map;
 public class MemberController {
 
     private final MemberService memberService;
+    private final SysUserMapper userMapper;
 
-    public MemberController(MemberService memberService) {
+    public MemberController(MemberService memberService, SysUserMapper userMapper) {
         this.memberService = memberService;
+        this.userMapper = userMapper;
     }
 
     @RequireProjectSupervisor("projectId")
@@ -43,6 +48,10 @@ public class MemberController {
     public Result<Void> updateRole(@PathVariable Long projectId,
                                    @PathVariable Long userId,
                                    @RequestBody UpdateMemberRoleRequest req) {
+        SysUser currentUser = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        if (currentUser != null && currentUser.getId().equals(userId)) {
+            return Result.fail("不能修改自己的角色");
+        }
         try {
             memberService.updateRole(projectId, userId, req.getRoleId());
             return Result.ok("更新成功");
