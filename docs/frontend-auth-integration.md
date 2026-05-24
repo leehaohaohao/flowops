@@ -614,7 +614,80 @@ DELETE /api/access/{id}
 
 ---
 
-## 九、服务管理接口（已有，权限增强）
+## 九、用户管理接口
+
+### 9.1 用户列表
+
+```
+GET /api/users/list
+```
+
+**权限：** 超级管理员看全部用户，主管看自己组内的用户。
+
+### 9.2 创建用户
+
+```
+POST /api/users/create
+```
+
+**权限：** 超级管理员可创建到任意组、分配任意角色。主管只能创建到自己管理的组，不能分配 `supervisor` 角色。
+
+**请求体：**
+```json
+{
+  "username": "zhangsan",
+  "password": "123456",
+  "groupId": 1,
+  "roleId": 3,
+  "extraPermissions": ["UPLOAD", "DELETE"]
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `username` | string | 是 | 用户名 |
+| `password` | string | 是 | 密码 |
+| `groupId` | long | 是 | 加入的项目组 ID |
+| `roleId` | long | 是 | 基础角色 ID |
+| `extraPermissions` | string[] | 否 | 额外权限码，与角色权限取并集 |
+
+**权限合并示例：**
+
+选择 `operator` 角色（VIEW + DEPLOY + START + STOP）+ `extraPermissions: ["UPLOAD"]`
+→ 最终权限 = VIEW, DEPLOY, START, STOP, UPLOAD
+
+系统会自动创建一个自定义角色（名称为 `operator+`），无需前端额外操作。
+
+**前端交互建议：**
+
+```
+┌─────────────────────────────────┐
+│ 用户名: [________]              │
+│ 密码:   [________]              │
+│ 项目组: [▼ 前端组    ]          │
+│ 角色:   [▼ operator  ]          │
+│                                 │
+│ 补充权限:                       │
+│   □ UPLOAD  □ EDIT_CONFIG       │
+│   □ DELETE                      │
+│                                 │
+│        [创建]  [取消]           │
+└─────────────────────────────────┘
+```
+
+选择角色后，勾选补充权限。角色已包含的权限自动勾选且不可取消。
+
+### 9.3 删除用户
+
+```
+DELETE /api/users/{id}
+```
+
+**权限：** 仅超级管理员。删除用户时同步清除其所有组成员关系。
+
+---
+
+## 十、服务管理接口（已有，权限增强）
 
 ### 9.1 服务列表
 
@@ -672,7 +745,7 @@ POST /api/services/create
 
 ---
 
-## 十、部署接口（已有，权限增强）
+## 十一、部署接口（已有，权限增强）
 
 所有部署接口现在需要对应权限，权限不足返回 403。
 
@@ -689,7 +762,7 @@ POST /api/services/create
 
 ---
 
-## 十一、完整对接流程
+## 十二、完整对接流程
 
 ### 11.1 应用启动时
 
@@ -777,7 +850,7 @@ api.interceptors.response.use(
 
 ---
 
-## 十二、注意事项
+## 十三、注意事项
 
 1. **路由建议使用 Hash 模式**（`/#/dashboard`），避免浏览器刷新时请求 `/dashboard` 等路径被后端当成 API 返回 404。Spring Boot 只托管 `/`、`/index.html` 和 `/assets/**` 静态资源。
 
