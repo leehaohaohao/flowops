@@ -84,12 +84,16 @@ public class UserService {
                 throw new BusinessException("权限不足：不能分配 supervisor 角色");
             }
 
+            List<String> extraPerms = assignment.getExtraPermissions();
+            if (!isSuperAdmin && extraPerms != null) {
+                validateAssignablePermissions(extraPerms);
+            }
+
             GroupMember member = new GroupMember();
             member.setProjectId(assignment.getProjectId());
             member.setUserId(user.getId());
             member.setRoleId(assignment.getRoleId());
 
-            List<String> extraPerms = assignment.getExtraPermissions();
             if (extraPerms != null && !extraPerms.isEmpty()) {
                 member.setExtraPermissions(String.join(",", extraPerms));
             }
@@ -135,8 +139,12 @@ public class UserService {
                 throw new BusinessException("权限不足：不能分配 supervisor 角色");
             }
 
-            String extraPermsStr = null;
             List<String> extraPerms = assignment.getExtraPermissions();
+            if (!isSuperAdmin && extraPerms != null) {
+                validateAssignablePermissions(extraPerms);
+            }
+
+            String extraPermsStr = null;
             if (extraPerms != null && !extraPerms.isEmpty()) {
                 extraPermsStr = String.join(",", extraPerms);
             }
@@ -222,5 +230,19 @@ public class UserService {
                 new LambdaQueryWrapper<RolePermission>()
                         .eq(RolePermission::getRoleId, roleId));
         return perms.stream().map(RolePermission::getPermCode).collect(Collectors.toSet());
+    }
+
+    private static final Set<String> ADMIN_ONLY_PERMISSIONS = Set.of("MANAGE_MEMBERS", "MANAGE_PROJECTS");
+
+    private void validateAssignablePermissions(List<String> extraPerms) {
+        for (String perm : extraPerms) {
+            if (ADMIN_ONLY_PERMISSIONS.contains(perm)) {
+                throw new BusinessException("权限不足：不能分配 " + perm + " 权限");
+            }
+        }
+    }
+
+    public List<PermRole> getAllRoles() {
+        return permRoleMapper.selectList(null);
     }
 }

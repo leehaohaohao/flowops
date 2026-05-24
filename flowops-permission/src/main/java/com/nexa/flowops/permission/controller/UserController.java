@@ -4,10 +4,12 @@ import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.permission.dto.AssignableVO;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.dto.ProjectRoleAssignment;
 import com.nexa.flowops.permission.dto.UpdateUserRequest;
 import com.nexa.flowops.permission.dto.UserVO;
+import com.nexa.flowops.permission.entity.PermRole;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/users")
@@ -43,9 +46,10 @@ public class UserController {
         if (currentUser.getIsSuperAdmin() == 1) {
             users = userService.list();
         } else {
-            List<Long> projectIds = permissionService.getUserProjects(currentUser.getId())
-                    .stream().filter(g -> "supervisor".equals(g.getRoleName()))
-                    .map(g -> g.getId()).toList();
+            List<Long> projectIds = permissionService.getVisibleProjectIds(currentUser.getId())
+                    .stream()
+                    .filter(pid -> permissionService.getEffectivePermissions(currentUser.getId(), pid).contains("MANAGE_MEMBERS"))
+                    .toList();
             if (projectIds.isEmpty()) {
                 return Result.ok(List.of());
             }
@@ -107,6 +111,48 @@ public class UserController {
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    @GetMapping("/assignable")
+    public Result<AssignableVO> assignable(@RequestParam Long projectId) {
+        SysUser operator = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        boolean isSuperAdmin = operator.getIsSuperAdmin() == 1;
+
+        // 非超管需要有该项目的 MANAGE_MEMBERS 权限
+        if (!isSuperAdmin
+                && !permissionService.getEffectivePermissions(operator.getId(), projectId).contains("MANAGE_MEMBERS")) {
+            return Result.fail(403, "权限不足");
+        }
+
+        Set<String> allPerms = permissionService.getAllPermissionCodes();
+        List<PermRole> allRoles = userService.getAllRoles();
+
+        AssignableVO vo = new AssignableVO();
+
+        if (isSuperAdmin) {
+            // 超管可分配所有角色和权限
+            vo.setRoles(allRoles.stream().map(this::toRoleVO).toList());
+            vo.setPermissions(new ArrayList<>(allPerms));
+        } else {
+            // 非超管不能分配 supervisor 角色和管理类权限
+            vo.setRoles(allRoles.stream()
+                    .filter(r -> !"supervisor".equals(r.getName()))
+                    .map(this::toRoleVO).toList());
+            vo.setPermissions(allPerms.stream()
+                    .filter(p -> !Set.of("MANAGE_MEMBERS", "MANAGE_PROJECTS").contains(p))
+                    .toList());
+        }
+
+        return Result.ok(vo);
+    }
+
+    private AssignableVO.RoleVO toRoleVO(PermRole role) {
+        AssignableVO.RoleVO vo = new AssignableVO.RoleVO();
+        vo.setId(role.getId());
+        vo.setName(role.getName());
+        vo.setDescription(role.getDescription());
+        vo.setPermissions(permissionService.getRolePermissions(role.getId()));
+        return vo;
     }
 
     @DeleteMapping("/{id}")
