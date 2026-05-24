@@ -136,8 +136,8 @@ INSERT INTO role_permission (role_id, perm_code) VALUES
 -- 数据迁移（现有数据兼容）
 -- ============================================
 
--- 兼容已有表：添加 extra_permissions 列
-ALTER TABLE group_member ADD COLUMN IF NOT EXISTS extra_permissions VARCHAR(500) DEFAULT NULL COMMENT '额外权限码，逗号分隔';
+-- 兼容已有表：添加 extra_permissions 列（已存在则忽略报错）
+ALTER TABLE group_member ADD COLUMN extra_permissions VARCHAR(500) DEFAULT NULL COMMENT '额外权限码，逗号分隔';
 
 -- 默认项目组和默认项目
 INSERT INTO project_group (id, name, description) VALUES (1, '默认项目组', '系统默认项目组');

@@ -43,8 +43,9 @@ public class DataMigrationService implements CommandLineRunner {
 
     private void runMigration() {
         // 1. 修改现有表
-        executeSql("ALTER TABLE sys_user ADD COLUMN IF NOT EXISTS is_super_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER role");
-        executeSql("ALTER TABLE deploy_service ADD COLUMN IF NOT EXISTS project_id BIGINT NOT NULL DEFAULT 1 AFTER id");
+        executeSql("ALTER TABLE sys_user ADD COLUMN is_super_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER role");
+        executeSql("ALTER TABLE deploy_service ADD COLUMN project_id BIGINT NOT NULL DEFAULT 1 AFTER id");
+        executeSql("ALTER TABLE group_member ADD COLUMN extra_permissions VARCHAR(500) DEFAULT NULL COMMENT '额外权限码，逗号分隔'");
 
         // 2. 创建新表
         executeSql("CREATE TABLE IF NOT EXISTS project_group (" +
@@ -68,6 +69,7 @@ public class DataMigrationService implements CommandLineRunner {
                 "group_id BIGINT NOT NULL, " +
                 "user_id BIGINT NOT NULL, " +
                 "role_id BIGINT NOT NULL, " +
+                "extra_permissions VARCHAR(500) DEFAULT NULL, " +
                 "UNIQUE KEY uk_group_user (group_id, user_id), " +
                 "INDEX idx_user_id (user_id))");
 
