@@ -40,12 +40,26 @@ public class ProjectGroupController {
     }
 
     @GetMapping
-    public Result<List<ProjectGroup>> list() {
+    public Result<List<Map<String, Object>>> list() {
         SysUser user = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        List<ProjectGroup> groups;
         if (user.getIsSuperAdmin() == 1) {
-            return Result.ok(groupService.listAll());
+            groups = groupService.listAll();
+        } else {
+            groups = groupService.listByUserId(user.getId());
         }
-        return Result.ok(groupService.listByUserId(user.getId()));
+        List<Map<String, Object>> result = groups.stream().map(g -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", g.getId());
+            map.put("name", g.getName());
+            map.put("description", g.getDescription());
+            map.put("isDefault", g.getIsDefault());
+            map.put("memberCount", groupService.getMemberCount(g.getId()));
+            map.put("projectCount", groupService.getProjectCount(g.getId()));
+            map.put("createTime", g.getCreateTime());
+            return map;
+        }).toList();
+        return Result.ok(result);
     }
 
     @GetMapping("/{id}")
@@ -57,8 +71,10 @@ public class ProjectGroupController {
         data.put("id", group.getId());
         data.put("name", group.getName());
         data.put("description", group.getDescription());
+        data.put("isDefault", group.getIsDefault());
         data.put("memberCount", groupService.getMemberCount(id));
         data.put("projectCount", groupService.getProjectCount(id));
+        data.put("createTime", group.getCreateTime());
         return Result.ok(data);
     }
 

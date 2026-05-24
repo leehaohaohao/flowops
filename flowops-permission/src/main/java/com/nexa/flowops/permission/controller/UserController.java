@@ -9,6 +9,7 @@ import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
+import com.nexa.flowops.permission.service.ProjectGroupService;
 import com.nexa.flowops.permission.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,12 +22,15 @@ public class UserController {
     private final UserService userService;
     private final SysUserMapper userMapper;
     private final PermissionService permissionService;
+    private final ProjectGroupService projectGroupService;
 
     public UserController(UserService userService, SysUserMapper userMapper,
-                          PermissionService permissionService) {
+                          PermissionService permissionService,
+                          ProjectGroupService projectGroupService) {
         this.userService = userService;
         this.userMapper = userMapper;
         this.permissionService = permissionService;
+        this.projectGroupService = projectGroupService;
     }
 
     @GetMapping("/list")
@@ -50,9 +54,19 @@ public class UserController {
         SysUser operator = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         boolean isSuperAdmin = operator.getIsSuperAdmin() == 1;
 
+        // 解析项目组：未指定则归入默认项目组
+        Long groupId = req.getGroupId();
+        if (groupId == null) {
+            var defaultGroup = projectGroupService.getDefaultGroup();
+            if (defaultGroup == null) {
+                return Result.fail("系统未配置默认项目组，请联系管理员");
+            }
+            groupId = defaultGroup.getId();
+        }
+
         if (!isSuperAdmin) {
             // 主管只能创建到自己的组，且不能分配 supervisor 角色
-            if (!permissionService.isSupervisor(operator.getId(), req.getGroupId())) {
+            if (!permissionService.isSupervisor(operator.getId(), groupId)) {
                 return Result.fail(403, "只能创建用户到自己管理的项目组");
             }
         }

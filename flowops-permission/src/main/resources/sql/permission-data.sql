@@ -1,6 +1,10 @@
 -- FlowOps 权限模块 - 种子数据
 -- 集成方需在执行 permission-schema.sql 后执行此脚本
 
+-- 默认项目组（不可删除，未指定组的用户自动归入）
+INSERT INTO project_group (name, description, is_default) VALUES
+('默认项目组', '系统默认项目组，未指定组的用户自动归入此组', 1);
+
 -- 权限定义
 INSERT INTO perm_definition (code, description) VALUES
 ('VIEW', '查看服务列表和状态'),

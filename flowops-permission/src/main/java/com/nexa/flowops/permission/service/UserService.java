@@ -16,13 +16,16 @@ public class UserService {
     private final SysUserMapper userMapper;
     private final GroupMemberMapper groupMemberMapper;
     private final PermRoleMapper permRoleMapper;
+    private final ProjectGroupService projectGroupService;
 
     public UserService(SysUserMapper userMapper,
                        GroupMemberMapper groupMemberMapper,
-                       PermRoleMapper permRoleMapper) {
+                       PermRoleMapper permRoleMapper,
+                       ProjectGroupService projectGroupService) {
         this.userMapper = userMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.permRoleMapper = permRoleMapper;
+        this.projectGroupService = projectGroupService;
     }
 
     public List<SysUser> list() {
@@ -57,13 +60,22 @@ public class UserService {
         SysUser user = new SysUser();
         user.setUsername(req.getUsername());
         user.setPassword(req.getPassword());
-        user.setRole("user");
         user.setIsSuperAdmin(0);
         userMapper.insert(user);
 
+        // 解析项目组：未指定则归入默认项目组
+        Long groupId = req.getGroupId();
+        if (groupId == null) {
+            ProjectGroup defaultGroup = projectGroupService.getDefaultGroup();
+            if (defaultGroup == null) {
+                throw new BusinessException("系统未配置默认项目组，请联系管理员");
+            }
+            groupId = defaultGroup.getId();
+        }
+
         // 加入项目组，额外权限直接存到成员表
         GroupMember member = new GroupMember();
-        member.setGroupId(req.getGroupId());
+        member.setGroupId(groupId);
         member.setUserId(user.getId());
         member.setRoleId(role.getId());
 

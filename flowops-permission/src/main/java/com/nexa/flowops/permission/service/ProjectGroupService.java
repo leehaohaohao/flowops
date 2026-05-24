@@ -61,6 +61,10 @@ public class ProjectGroupService {
     }
 
     public void delete(Long id) {
+        ProjectGroup group = groupMapper.selectById(id);
+        if (group != null && group.getIsDefault() == 1) {
+            throw new BusinessException("默认项目组不可删除");
+        }
         // 检查是否有项目
         Long projectCount = projectMapper.selectCount(
                 new LambdaQueryWrapper<Project>().eq(Project::getGroupId, id));
@@ -81,5 +85,10 @@ public class ProjectGroupService {
     public long getProjectCount(Long groupId) {
         return projectMapper.selectCount(
                 new LambdaQueryWrapper<Project>().eq(Project::getGroupId, groupId));
+    }
+
+    public ProjectGroup getDefaultGroup() {
+        return groupMapper.selectOne(
+                new LambdaQueryWrapper<ProjectGroup>().eq(ProjectGroup::getIsDefault, 1));
     }
 }
