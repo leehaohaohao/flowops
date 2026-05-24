@@ -2,7 +2,6 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # 安装 Docker CLI（用于在容器内操作宿主机 Docker）
-# 使用阿里云镜像源解决国内访问 Debian 和 Docker 官方源超时问题
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -16,6 +15,11 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /data/flowops/services /data/flowops/logs
-COPY flowops.jar app.jar
+
+# 复制 Spring Boot fat JAR（由 deploy-prod.sh 重命名为 app.jar）
+COPY app.jar app.jar
+
 EXPOSE 8080
+
+# 不硬编码 profile，由 docker run -e SPRING_PROFILES_ACTIVE 控制
 ENTRYPOINT ["java", "-jar", "app.jar"]

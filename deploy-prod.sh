@@ -4,16 +4,16 @@ set -e
 # ==========================================
 #  FlowOps 生产部署脚本
 #  用法: bash deploy-prod.sh <jar包名> [profile]
-#  示例: bash deploy-prod.sh flowops-0.0.1-SNAPSHOT.jar
-#         bash deploy-prod.sh flowops.jar dev
+#  示例: bash deploy-prod.sh flowops-app-1.1.0.jar
+#         bash deploy-prod.sh app.jar dev
 # ==========================================
 
 IMAGE_NAME="flowops"
 CONTAINER_NAME="flowops"
-PORT="8880"
+PORT="${PORT:-8880}"
 DATA_DIR="/data/flowops"
 APP_DIR="/app/flowops"
-PROFILE="${2:-prod}"   # 默认 prod，可通过第二个参数和覆盖
+PROFILE="${2:-prod}"
 
 echo "=========================================="
 echo "  FlowOps 生产部署"
@@ -22,7 +22,7 @@ echo "=========================================="
 # 检查参数
 if [ -z "$1" ]; then
     echo "[ERROR] 请指定 JAR 文件名"
-    echo "用法: bash deploy-prod.sh <jar包名>"
+    echo "用法: bash deploy-prod.sh <jar包名> [profile]"
     exit 1
 fi
 
@@ -34,7 +34,7 @@ if [ ! -f "$JAR_FILE" ]; then
     exit 1
 fi
 
-# 获取 JAR 绝对路径（解决相对路径/目录不同的问题）
+# 获取 JAR 绝对路径
 JAR_FILE="$(cd "$(dirname "$JAR_FILE")" && pwd)/$(basename "$JAR_FILE")"
 
 # 检查 Docker
@@ -43,15 +43,23 @@ if ! command -v docker &>/dev/null; then
     exit 1
 fi
 
+# 检查 .env.prod 文件
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env.prod"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "[ERROR] 未找到 .env.prod 文件"
+    echo "请复制 .env.prod.example 为 .env.prod 并填入真实配置"
+    exit 1
+fi
+
 # 确保 APP 目录存在
 mkdir -p "$APP_DIR"
 
-# 复制 JAR 到 APP 目录并重命名为 flowops.jar（Dockerfile 期望的文件名）
-echo "[0/4] 复制 JAR: $(basename "$JAR_FILE") -> $APP_DIR/flowops.jar"
-cp -f "$JAR_FILE" "$APP_DIR/flowops.jar"
+# 复制 JAR 到 APP 目录并重命名
+echo "[0/4] 复制 JAR: $(basename "$JAR_FILE") -> $APP_DIR/app.jar"
+cp -f "$JAR_FILE" "$APP_DIR/app.jar"
 
-# 验证复制成功
-if [ ! -f "$APP_DIR/flowops.jar" ]; then
+if [ ! -f "$APP_DIR/app.jar" ]; then
     echo "[ERROR] JAR 复制失败"
     exit 1
 fi
@@ -81,9 +89,9 @@ docker run -d \
     --restart unless-stopped \
     -p "$PORT:8080" \
     -e "SPRING_PROFILES_ACTIVE=$PROFILE" \
-    -e "MYSQL_REMOTE=$MYSQL_REMOTE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR:/data/flowops" \
+    -v "$ENV_FILE:/app/.env.prod:ro" \
     "$IMAGE_NAME:latest"
 
 # 等待启动
