@@ -1,7 +1,7 @@
 package com.nexa.flowops.permission.controller;
 
 import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.RequireGroupSupervisor;
+import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.AddMemberRequest;
 import com.nexa.flowops.permission.dto.UpdateMemberRoleRequest;
@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/groups/{groupId}/members")
+@RequestMapping("/api/projects/{projectId}/members")
 public class MemberController {
 
     private final MemberService memberService;
@@ -21,40 +21,40 @@ public class MemberController {
         this.memberService = memberService;
     }
 
-    @RequireGroupSupervisor("groupId")
+    @RequireProjectSupervisor("projectId")
     @GetMapping
-    public Result<List<Map<String, Object>>> list(@PathVariable Long groupId) {
-        return Result.ok(memberService.listMembers(groupId));
+    public Result<List<Map<String, Object>>> list(@PathVariable Long projectId) {
+        return Result.ok(memberService.listMembers(projectId));
     }
 
-    @RequireGroupSupervisor("groupId")
+    @RequireProjectSupervisor("projectId")
     @PostMapping
-    public Result<Void> add(@PathVariable Long groupId, @RequestBody AddMemberRequest req) {
+    public Result<Void> add(@PathVariable Long projectId, @RequestBody AddMemberRequest req) {
         try {
-            memberService.addMember(groupId, req.getUserId(), req.getRoleId());
+            memberService.addMember(projectId, req.getUserId(), req.getRoleId());
             return Result.ok("添加成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
     }
 
-    @RequireGroupSupervisor("groupId")
+    @RequireProjectSupervisor("projectId")
     @PutMapping("/{userId}")
-    public Result<Void> updateRole(@PathVariable Long groupId,
+    public Result<Void> updateRole(@PathVariable Long projectId,
                                    @PathVariable Long userId,
                                    @RequestBody UpdateMemberRoleRequest req) {
         try {
-            memberService.updateRole(groupId, userId, req.getRoleId());
+            memberService.updateRole(projectId, userId, req.getRoleId());
             return Result.ok("更新成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
     }
 
-    @RequireGroupSupervisor("groupId")
+    @RequireProjectSupervisor("projectId")
     @DeleteMapping("/{userId}")
-    public Result<Void> remove(@PathVariable Long groupId, @PathVariable Long userId) {
-        memberService.removeMember(groupId, userId);
+    public Result<Void> remove(@PathVariable Long projectId, @PathVariable Long userId) {
+        memberService.removeMember(projectId, userId);
         return Result.ok("移除成功");
     }
 }

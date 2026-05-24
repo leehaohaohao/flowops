@@ -2,6 +2,7 @@ package com.nexa.flowops.permission.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.PasswordUtil;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.entity.*;
 import com.nexa.flowops.permission.mapper.*;
@@ -16,26 +17,26 @@ public class UserService {
     private final SysUserMapper userMapper;
     private final GroupMemberMapper groupMemberMapper;
     private final PermRoleMapper permRoleMapper;
-    private final ProjectGroupService projectGroupService;
+    private final ProjectService projectService;
 
     public UserService(SysUserMapper userMapper,
                        GroupMemberMapper groupMemberMapper,
                        PermRoleMapper permRoleMapper,
-                       ProjectGroupService projectGroupService) {
+                       ProjectService projectService) {
         this.userMapper = userMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.permRoleMapper = permRoleMapper;
-        this.projectGroupService = projectGroupService;
+        this.projectService = projectService;
     }
 
     public List<SysUser> list() {
         return userMapper.selectList(null);
     }
 
-    public List<SysUser> listByGroupIds(List<Long> groupIds) {
-        if (groupIds.isEmpty()) return List.of();
+    public List<SysUser> listByProjectIds(List<Long> projectIds) {
+        if (projectIds.isEmpty()) return List.of();
         List<GroupMember> members = groupMemberMapper.selectList(
-                new LambdaQueryWrapper<GroupMember>().in(GroupMember::getGroupId, groupIds));
+                new LambdaQueryWrapper<GroupMember>().in(GroupMember::getProjectId, projectIds));
         List<Long> userIds = members.stream().map(GroupMember::getUserId).distinct().toList();
         if (userIds.isEmpty()) return List.of();
         return userMapper.selectList(
@@ -59,23 +60,22 @@ public class UserService {
 
         SysUser user = new SysUser();
         user.setUsername(req.getUsername());
-        user.setPassword(req.getPassword());
+        user.setPassword(PasswordUtil.encode(req.getPassword()));
         user.setIsSuperAdmin(0);
         userMapper.insert(user);
 
-        // 解析项目组：未指定则归入默认项目组
-        Long groupId = req.getGroupId();
-        if (groupId == null) {
-            ProjectGroup defaultGroup = projectGroupService.getDefaultGroup();
-            if (defaultGroup == null) {
-                throw new BusinessException("系统未配置默认项目组，请联系管理员");
+        // 解析项目：未指定则归入默认项目
+        Long projectId = req.getProjectId();
+        if (projectId == null) {
+            Project defaultProject = projectService.getDefaultProject();
+            if (defaultProject == null) {
+                throw new BusinessException("系统未配置默认项目，请联系管理员");
             }
-            groupId = defaultGroup.getId();
+            projectId = defaultProject.getId();
         }
 
-        // 加入项目组，额外权限直接存到成员表
         GroupMember member = new GroupMember();
-        member.setGroupId(groupId);
+        member.setProjectId(projectId);
         member.setUserId(user.getId());
         member.setRoleId(role.getId());
 

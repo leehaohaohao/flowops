@@ -55,8 +55,8 @@ public class AuthController {
         data.put("username", user.getUsername());
         data.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
 
-        List<Map<String, Object>> groups = permissionService.getUserGroups(user.getId());
-        data.put("groups", groups);
+        List<Map<String, Object>> projects = permissionService.getUserProjects(user.getId());
+        data.put("projects", projects);
 
         if (user.getIsSuperAdmin() != 1) {
             data.put("projectPermissions", permissionService.getProjectPermissions(user.getId()));

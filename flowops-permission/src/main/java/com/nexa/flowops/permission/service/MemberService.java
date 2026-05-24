@@ -18,21 +18,18 @@ public class MemberService {
     private final GroupMemberMapper groupMemberMapper;
     private final SysUserMapper userMapper;
     private final PermRoleMapper permRoleMapper;
-    private final PermissionService permissionService;
 
     public MemberService(GroupMemberMapper groupMemberMapper,
                          SysUserMapper userMapper,
-                         PermRoleMapper permRoleMapper,
-                         PermissionService permissionService) {
+                         PermRoleMapper permRoleMapper) {
         this.groupMemberMapper = groupMemberMapper;
         this.userMapper = userMapper;
         this.permRoleMapper = permRoleMapper;
-        this.permissionService = permissionService;
     }
 
-    public List<Map<String, Object>> listMembers(Long groupId) {
+    public List<Map<String, Object>> listMembers(Long projectId) {
         List<GroupMember> members = groupMemberMapper.selectList(
-                new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, groupId));
+                new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getProjectId, projectId));
         List<Map<String, Object>> result = new ArrayList<>();
         for (GroupMember member : members) {
             SysUser user = userMapper.selectById(member.getUserId());
@@ -49,42 +46,41 @@ public class MemberService {
         return result;
     }
 
-    public void addMember(Long groupId, Long userId, Long roleId) {
-        // 检查是否已存在
+    public void addMember(Long projectId, Long userId, Long roleId) {
         GroupMember existing = groupMemberMapper.selectOne(
                 new LambdaQueryWrapper<GroupMember>()
-                        .eq(GroupMember::getGroupId, groupId)
+                        .eq(GroupMember::getProjectId, projectId)
                         .eq(GroupMember::getUserId, userId));
         if (existing != null) {
-            throw new BusinessException("该用户已是项目组成员");
+            throw new BusinessException("该用户已是项目成员");
         }
         GroupMember member = new GroupMember();
-        member.setGroupId(groupId);
+        member.setProjectId(projectId);
         member.setUserId(userId);
         member.setRoleId(roleId);
         groupMemberMapper.insert(member);
     }
 
-    public void updateRole(Long groupId, Long userId, Long roleId) {
+    public void updateRole(Long projectId, Long userId, Long roleId) {
         GroupMember member = groupMemberMapper.selectOne(
                 new LambdaQueryWrapper<GroupMember>()
-                        .eq(GroupMember::getGroupId, groupId)
+                        .eq(GroupMember::getProjectId, projectId)
                         .eq(GroupMember::getUserId, userId));
-        if (member == null) throw new BusinessException("该用户不是项目组成员");
+        if (member == null) throw new BusinessException("该用户不是项目成员");
         member.setRoleId(roleId);
         groupMemberMapper.updateById(member);
     }
 
-    public void removeMember(Long groupId, Long userId) {
+    public void removeMember(Long projectId, Long userId) {
         groupMemberMapper.delete(
                 new LambdaQueryWrapper<GroupMember>()
-                        .eq(GroupMember::getGroupId, groupId)
+                        .eq(GroupMember::getProjectId, projectId)
                         .eq(GroupMember::getUserId, userId));
     }
 
-    public List<Long> getUserGroupIds(Long userId) {
+    public List<Long> getUserProjectIds(Long userId) {
         List<GroupMember> memberships = groupMemberMapper.selectList(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getUserId, userId));
-        return memberships.stream().map(GroupMember::getGroupId).toList();
+        return memberships.stream().map(GroupMember::getProjectId).toList();
     }
 }

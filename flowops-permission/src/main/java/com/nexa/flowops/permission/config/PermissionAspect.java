@@ -1,12 +1,10 @@
 package com.nexa.flowops.permission.config;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.nexa.flowops.common.RequireGroupSupervisor;
+import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
-import com.nexa.flowops.permission.entity.Project;
 import com.nexa.flowops.permission.entity.SysUser;
-import com.nexa.flowops.permission.mapper.ProjectMapper;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,13 +28,10 @@ public class PermissionAspect {
 
     private final PermissionService permissionService;
     private final SysUserMapper userMapper;
-    private final ProjectMapper projectMapper;
 
-    public PermissionAspect(PermissionService permissionService, SysUserMapper userMapper,
-                            ProjectMapper projectMapper) {
+    public PermissionAspect(PermissionService permissionService, SysUserMapper userMapper) {
         this.permissionService = permissionService;
         this.userMapper = userMapper;
-        this.projectMapper = projectMapper;
     }
 
     @Around("@annotation(requirePermission)")
@@ -59,32 +54,18 @@ public class PermissionAspect {
     }
 
     @Around("@annotation(requireSupervisor)")
-    public Object checkGroupSupervisor(ProceedingJoinPoint pjp,
-                                       RequireGroupSupervisor requireSupervisor) throws Throwable {
+    public Object checkProjectSupervisor(ProceedingJoinPoint pjp,
+                                        RequireProjectSupervisor requireSupervisor) throws Throwable {
         SysUser user = getCurrentUser();
         if (user == null) return pjp.proceed();
         if (user.getIsSuperAdmin() == 1) return pjp.proceed();
 
-        String expr = requireSupervisor.value();
-        Long groupId;
-
-        if (expr.startsWith("project:")) {
-            // 从路径变量取 projectId，反查项目的 groupId
-            String projectIdVar = expr.substring(8);
-            Long projectId = resolveLong(pjp, projectIdVar);
-            if (projectId == null) return Result.fail(400, "缺少项目 ID");
-            Project project = projectMapper.selectById(projectId);
-            if (project == null) return Result.fail(400, "项目不存在");
-            groupId = project.getGroupId();
-        } else {
-            groupId = resolveLong(pjp, expr);
+        Long projectId = resolveLong(pjp, requireSupervisor.value());
+        if (projectId == null) {
+            return Result.fail(400, "缺少 projectId");
         }
 
-        if (groupId == null) {
-            return Result.fail(400, "缺少 groupId");
-        }
-
-        if (!permissionService.isSupervisor(user.getId(), groupId)) {
+        if (!permissionService.isSupervisor(user.getId(), projectId)) {
             return Result.fail(403, "权限不足");
         }
 

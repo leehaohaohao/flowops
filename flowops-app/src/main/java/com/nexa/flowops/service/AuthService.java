@@ -1,5 +1,6 @@
 package com.nexa.flowops.service;
 
+import com.nexa.flowops.common.PasswordUtil;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import org.springframework.stereotype.Service;
@@ -18,7 +19,6 @@ public class AuthService {
         if (user == null) {
             return false;
         }
-        // 简单密码校验，生产环境应使用 BCrypt
-        return user.getPassword().equals(password);
+        return PasswordUtil.matches(password, user.getPassword());
     }
 }

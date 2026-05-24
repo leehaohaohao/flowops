@@ -3,7 +3,7 @@ package com.nexa.flowops.permission.config;
 import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexa.flowops.common.Result;
-import com.nexa.flowops.common.RequireGroupSupervisor;
+import com.nexa.flowops.common.RequireProjectSupervisor;
 import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
@@ -41,7 +41,7 @@ public class PermissionInterceptor implements HandlerInterceptor {
     private static final Pattern SERVICE_ID_IN_SERVICES = Pattern.compile("/api/services/(\\d+)");
 
     // 需要主管权限的路径
-    private static final Pattern GROUP_MANAGEMENT = Pattern.compile("/api/groups/(\\d+)/members");
+    private static final Pattern PROJECT_MANAGEMENT = Pattern.compile("/api/projects/(\\d+)/members");
     private static final Pattern PROJECT_CREATE = Pattern.compile("/api/projects");
 
     public PermissionInterceptor(PermissionService permissionService, SysUserMapper userMapper) {
@@ -64,7 +64,7 @@ public class PermissionInterceptor implements HandlerInterceptor {
         // 如果 Controller 方法上有权限注解，交给 PermissionAspect 处理
         if (handler instanceof HandlerMethod hm) {
             if (hm.hasMethodAnnotation(RequirePermission.class)
-                    || hm.hasMethodAnnotation(RequireGroupSupervisor.class)) {
+                    || hm.hasMethodAnnotation(RequireProjectSupervisor.class)) {
                 return true;
             }
         }
@@ -94,9 +94,9 @@ public class PermissionInterceptor implements HandlerInterceptor {
             return checkServicePermission(method, uri, user.getId(), response);
         }
 
-        // 3. 检查项目组管理权限（需要主管或超级管理员）
-        if (uri.startsWith("/api/groups/") && uri.contains("/members")) {
-            return checkGroupManagement(uri, user.getId(), response);
+        // 3. 检查项目成员管理权限（需要主管或超级管理员）
+        if (uri.startsWith("/api/projects/") && uri.contains("/members")) {
+            return checkProjectMemberManagement(uri, user.getId(), response);
         }
 
         // 4. 检查项目管理权限
@@ -163,13 +163,13 @@ public class PermissionInterceptor implements HandlerInterceptor {
         return true;
     }
 
-    private boolean checkGroupManagement(String uri, Long userId,
-                                         HttpServletResponse response) throws Exception {
-        Matcher matcher = GROUP_MANAGEMENT.matcher(uri);
+    private boolean checkProjectMemberManagement(String uri, Long userId,
+                                                 HttpServletResponse response) throws Exception {
+        Matcher matcher = PROJECT_MANAGEMENT.matcher(uri);
         if (!matcher.find()) return true;
 
-        Long groupId = Long.parseLong(matcher.group(1));
-        if (!permissionService.isSupervisor(userId, groupId)) {
+        Long projectId = Long.parseLong(matcher.group(1));
+        if (!permissionService.isSupervisor(userId, projectId)) {
             writeForbidden(response);
             return false;
         }
