@@ -7,6 +7,7 @@ import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployRecordMapper;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import com.nexa.flowops.util.DockerUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -357,6 +358,7 @@ public class DeployExecutorService {
                                      Map<String, Object> backendConfig,
                                      Map<String, Object> frontendConfig) throws IOException {
         int hostPort = service.getPort();
+        List<Map<String, Integer>> extraPorts = parseExtraPorts(service.getExtraPorts());
         StringBuilder sb = new StringBuilder();
         sb.append("services:\n");
 
@@ -366,6 +368,7 @@ public class DeployExecutorService {
             sb.append("    build: .\n");
             sb.append("    ports:\n");
             sb.append("      - \"").append(hostPort).append(":").append(containerPort).append("\"\n");
+            appendExtraPorts(sb, extraPorts);
             appendVolumes(sb, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
@@ -374,6 +377,7 @@ public class DeployExecutorService {
             sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
             sb.append("    ports:\n");
             sb.append("      - \"").append(hostPort).append(":80\"\n");
+            appendExtraPorts(sb, extraPorts);
             sb.append("    volumes:\n");
             sb.append("      - ./dist:/usr/share/nginx/html\n");
             sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
@@ -385,6 +389,10 @@ public class DeployExecutorService {
             sb.append("    build: .\n");
             sb.append("    expose:\n");
             sb.append("      - \"").append(containerPort).append("\"\n");
+            if (!extraPorts.isEmpty()) {
+                sb.append("    ports:\n");
+                appendExtraPorts(sb, extraPorts);
+            }
             appendVolumes(sb, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
@@ -403,6 +411,26 @@ public class DeployExecutorService {
 
         Files.writeString(new File(volumeDir, "docker-compose.yml").toPath(), sb.toString());
         log.info("[{}] 已生成 docker-compose.yml (type={})", service.getName(), serviceType);
+    }
+
+    private List<Map<String, Integer>> parseExtraPorts(String extraPortsJson) {
+        if (extraPortsJson == null || extraPortsJson.isBlank()) return List.of();
+        try {
+            return new ObjectMapper().readValue(extraPortsJson, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("解析 extraPorts 失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private void appendExtraPorts(StringBuilder sb, List<Map<String, Integer>> extraPorts) {
+        for (Map<String, Integer> ep : extraPorts) {
+            Integer hp = ep.get("hostPort");
+            Integer cp = ep.get("containerPort");
+            if (hp != null && cp != null) {
+                sb.append("      - \"").append(hp).append(":").append(cp).append("\"\n");
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

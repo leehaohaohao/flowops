@@ -45,6 +45,7 @@ public class ServiceMgmtService {
         DeployService service = new DeployService();
         service.setName(req.getName());
         service.setPort(req.getPort());
+        service.setExtraPorts(req.getExtraPorts());
         service.setServiceType(req.getServiceType());
         service.setServiceConfig(req.getServiceConfig());
         service.setProjectId(req.getProjectId());
@@ -65,6 +66,9 @@ public class ServiceMgmtService {
         }
         if (req.getPort() != null) {
             service.setPort(req.getPort());
+        }
+        if (req.getExtraPorts() != null) {
+            service.setExtraPorts(req.getExtraPorts());
         }
         if (req.getServiceType() != null) {
             service.setServiceType(req.getServiceType());

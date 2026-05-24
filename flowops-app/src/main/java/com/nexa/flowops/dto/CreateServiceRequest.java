@@ -7,6 +7,7 @@ public class CreateServiceRequest {
     private String name;
     private Long projectId;
     private Integer port;
+    private String extraPorts;
     private String serviceType;
     private String serviceConfig;
 }
