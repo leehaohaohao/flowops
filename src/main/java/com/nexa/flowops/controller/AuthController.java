@@ -2,6 +2,7 @@ package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.LoginRequest;
 import com.nexa.flowops.entity.SysUser;
 import com.nexa.flowops.mapper.SysUserMapper;
 import com.nexa.flowops.service.AuthService;
@@ -28,11 +29,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Result<String> login(@RequestBody Map<String, String> params) {
-        String username = params.get("username");
-        String password = params.get("password");
-        if (authService.login(username, password)) {
-            StpUtil.login(username);
+    public Result<String> login(@RequestBody LoginRequest req) {
+        if (authService.login(req.getUsername(), req.getPassword())) {
+            StpUtil.login(req.getUsername());
             return Result.ok("登录成功", StpUtil.getTokenValue());
         }
         return Result.fail(401, "用户名或密码错误");
@@ -56,11 +55,9 @@ public class AuthController {
         data.put("username", user.getUsername());
         data.put("isSuperAdmin", user.getIsSuperAdmin() == 1);
 
-        // 用户所属项目组
         List<Map<String, Object>> groups = permissionService.getUserGroups(user.getId());
         data.put("groups", groups);
 
-        // 按项目维度的权限（超级管理员不需要，前端通过 isSuperAdmin 判断）
         if (user.getIsSuperAdmin() != 1) {
             data.put("projectPermissions", permissionService.getProjectPermissions(user.getId()));
         }

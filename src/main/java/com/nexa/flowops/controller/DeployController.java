@@ -1,5 +1,6 @@
 package com.nexa.flowops.controller;
 
+import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.service.DeployExecutorService;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ public class DeployController {
         this.deployService = deployService;
     }
 
+    @RequirePermission("UPLOAD")
     @PostMapping("/upload/{serviceId}")
     public Result<String> upload(
             @PathVariable Long serviceId,
@@ -25,7 +27,6 @@ public class DeployController {
             @RequestParam(value = "type", defaultValue = "jar") String type) {
         String uploadPath = deployService.getUploadPath(serviceId, type);
         try {
-            // JAR 类型统一重命名为 app.jar，与默认 docker-compose 模板匹配
             String filename = "jar".equals(type) ? "app.jar" : file.getOriginalFilename();
             File targetFile = new File(uploadPath, filename);
             file.transferTo(targetFile);
@@ -35,6 +36,7 @@ public class DeployController {
         }
     }
 
+    @RequirePermission("UPLOAD")
     @PostMapping("/upload-dist/{serviceId}")
     public Result<Void> uploadDist(
             @PathVariable Long serviceId,
@@ -48,31 +50,37 @@ public class DeployController {
         }
     }
 
+    @RequirePermission("DEPLOY")
     @PostMapping("/start/{serviceId}")
     public Result<Void> start(@PathVariable Long serviceId) {
         return deployService.deploy(serviceId);
     }
 
+    @RequirePermission("STOP")
     @PostMapping("/stop/{serviceId}")
     public Result<Void> stop(@PathVariable Long serviceId) {
         return deployService.stopContainer(serviceId);
     }
 
+    @RequirePermission("DEPLOY")
     @PostMapping("/restart/{serviceId}")
     public Result<Void> restart(@PathVariable Long serviceId) {
         return deployService.restartContainer(serviceId);
     }
 
+    @RequirePermission("DELETE")
     @PostMapping("/remove/{serviceId}")
     public Result<Void> remove(@PathVariable Long serviceId) {
         return deployService.removeContainer(serviceId);
     }
 
+    @RequirePermission("VIEW")
     @GetMapping("/status/{serviceId}")
     public Result<Map<String, Object>> status(@PathVariable Long serviceId) {
         return deployService.getContainerStatus(serviceId);
     }
 
+    @RequirePermission("VIEW")
     @GetMapping("/logs/{serviceId}")
     public Result<String> containerLogs(
             @PathVariable Long serviceId,

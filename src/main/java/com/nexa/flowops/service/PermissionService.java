@@ -207,6 +207,14 @@ public class PermissionService {
     }
 
     /**
+     * 通过服务 ID 反查所属的项目 ID
+     */
+    public Long getProjectIdByServiceId(Long serviceId) {
+        DeployService service = deployServiceMapper.selectById(serviceId);
+        return service != null ? service.getProjectId() : null;
+    }
+
+    /**
      * 获取用户跨组授权的项目权限
      */
     public Map<Long, List<String>> getCrossProjectPermissions(Long userId) {

@@ -2,13 +2,14 @@ package com.nexa.flowops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.dto.CreateServiceRequest;
+import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class ServiceMgmtService {
@@ -34,45 +35,42 @@ public class ServiceMgmtService {
         return serviceMapper.selectById(id);
     }
 
-    public void createService(Map<String, Object> params) {
-        String name = (String) params.get("name");
-        // 检查服务名是否已存在
+    public void createService(CreateServiceRequest req) {
         Long count = serviceMapper.selectCount(
-                new LambdaQueryWrapper<DeployService>().eq(DeployService::getName, name));
+                new LambdaQueryWrapper<DeployService>().eq(DeployService::getName, req.getName()));
         if (count > 0) {
-            throw new BusinessException("服务名「" + name + "」已存在，请更换名称");
+            throw new BusinessException("服务名「" + req.getName() + "」已存在，请更换名称");
         }
 
         DeployService service = new DeployService();
-        service.setName(name);
-        service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
-        service.setServiceType((String) params.get("serviceType"));
-        service.setServiceConfig((String) params.get("serviceConfig"));
-        service.setProjectId(Long.parseLong(String.valueOf(params.get("projectId"))));
-        service.setVolumeDir(storagePath + "/" + name);
+        service.setName(req.getName());
+        service.setPort(req.getPort());
+        service.setServiceType(req.getServiceType());
+        service.setServiceConfig(req.getServiceConfig());
+        service.setProjectId(req.getProjectId());
+        service.setVolumeDir(storagePath + "/" + req.getName());
         service.setStatus("stopped");
         serviceMapper.insert(service);
 
-        // 创建服务目录
         new File(service.getVolumeDir()).mkdirs();
     }
 
-    public void updateService(Long id, Map<String, Object> params) {
+    public void updateService(Long id, UpdateServiceRequest req) {
         DeployService service = serviceMapper.selectById(id);
         if (service == null) {
-            throw new RuntimeException("服务不存在");
+            throw new BusinessException("服务不存在");
         }
-        if (params.containsKey("name")) {
-            service.setName((String) params.get("name"));
+        if (req.getName() != null) {
+            service.setName(req.getName());
         }
-        if (params.containsKey("port")) {
-            service.setPort(Integer.parseInt(String.valueOf(params.get("port"))));
+        if (req.getPort() != null) {
+            service.setPort(req.getPort());
         }
-        if (params.containsKey("serviceType")) {
-            service.setServiceType((String) params.get("serviceType"));
+        if (req.getServiceType() != null) {
+            service.setServiceType(req.getServiceType());
         }
-        if (params.containsKey("serviceConfig")) {
-            service.setServiceConfig((String) params.get("serviceConfig"));
+        if (req.getServiceConfig() != null) {
+            service.setServiceConfig(req.getServiceConfig());
         }
         serviceMapper.updateById(service);
     }

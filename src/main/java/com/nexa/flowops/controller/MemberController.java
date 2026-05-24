@@ -1,12 +1,11 @@
 package com.nexa.flowops.controller;
 
 import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.RequireGroupSupervisor;
 import com.nexa.flowops.common.Result;
-import com.nexa.flowops.entity.SysUser;
-import com.nexa.flowops.mapper.SysUserMapper;
+import com.nexa.flowops.dto.AddMemberRequest;
+import com.nexa.flowops.dto.UpdateMemberRoleRequest;
 import com.nexa.flowops.service.MemberService;
-import com.nexa.flowops.service.PermissionService;
-import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,47 +16,42 @@ import java.util.Map;
 public class MemberController {
 
     private final MemberService memberService;
-    private final PermissionService permissionService;
-    private final SysUserMapper userMapper;
 
-    public MemberController(MemberService memberService,
-                            PermissionService permissionService,
-                            SysUserMapper userMapper) {
+    public MemberController(MemberService memberService) {
         this.memberService = memberService;
-        this.permissionService = permissionService;
-        this.userMapper = userMapper;
     }
 
+    @RequireGroupSupervisor("groupId")
     @GetMapping
     public Result<List<Map<String, Object>>> list(@PathVariable Long groupId) {
         return Result.ok(memberService.listMembers(groupId));
     }
 
+    @RequireGroupSupervisor("groupId")
     @PostMapping
-    public Result<Void> add(@PathVariable Long groupId, @RequestBody Map<String, Object> params) {
-        Long userId = Long.parseLong(String.valueOf(params.get("userId")));
-        Long roleId = Long.parseLong(String.valueOf(params.get("roleId")));
+    public Result<Void> add(@PathVariable Long groupId, @RequestBody AddMemberRequest req) {
         try {
-            memberService.addMember(groupId, userId, roleId);
+            memberService.addMember(groupId, req.getUserId(), req.getRoleId());
             return Result.ok("添加成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
     }
 
+    @RequireGroupSupervisor("groupId")
     @PutMapping("/{userId}")
     public Result<Void> updateRole(@PathVariable Long groupId,
                                    @PathVariable Long userId,
-                                   @RequestBody Map<String, Object> params) {
-        Long roleId = Long.parseLong(String.valueOf(params.get("roleId")));
+                                   @RequestBody UpdateMemberRoleRequest req) {
         try {
-            memberService.updateRole(groupId, userId, roleId);
+            memberService.updateRole(groupId, userId, req.getRoleId());
             return Result.ok("更新成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
     }
 
+    @RequireGroupSupervisor("groupId")
     @DeleteMapping("/{userId}")
     public Result<Void> remove(@PathVariable Long groupId, @PathVariable Long userId) {
         memberService.removeMember(groupId, userId);

@@ -3,12 +3,15 @@ package com.nexa.flowops.config;
 import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.RequireGroupSupervisor;
+import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.entity.SysUser;
 import com.nexa.flowops.mapper.SysUserMapper;
 import com.nexa.flowops.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Map;
@@ -58,6 +61,14 @@ public class PermissionInterceptor implements HandlerInterceptor {
         // OPTIONS 预检请求放行
         if ("OPTIONS".equals(method)) return true;
 
+        // 如果 Controller 方法上有权限注解，交给 PermissionAspect 处理
+        if (handler instanceof HandlerMethod hm) {
+            if (hm.hasMethodAnnotation(RequirePermission.class)
+                    || hm.hasMethodAnnotation(RequireGroupSupervisor.class)) {
+                return true;
+            }
+        }
+
         // 获取当前用户
         String username;
         try {
@@ -70,6 +81,8 @@ public class PermissionInterceptor implements HandlerInterceptor {
 
         // 超级管理员放行所有
         if (user.getIsSuperAdmin() == 1) return true;
+
+        // --- 以下为没有注解的旧接口兜底检查 ---
 
         // 1. 检查 deploy 接口权限
         if (uri.startsWith("/api/deploy/")) {

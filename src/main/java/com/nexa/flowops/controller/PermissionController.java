@@ -3,12 +3,12 @@ package com.nexa.flowops.controller;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.GrantAccessRequest;
 import com.nexa.flowops.entity.ProjectAccess;
 import com.nexa.flowops.mapper.ProjectAccessMapper;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/access")
@@ -22,23 +22,17 @@ public class PermissionController {
     }
 
     @PostMapping("/grant")
-    public Result<Void> grant(@RequestBody Map<String, Object> params) {
-        Long userId = Long.parseLong(String.valueOf(params.get("userId")));
-        Long projectId = Long.parseLong(String.valueOf(params.get("projectId")));
-        @SuppressWarnings("unchecked")
-        List<String> permCodes = (List<String>) params.get("permCodes");
-
-        for (String permCode : permCodes) {
-            // 检查是否已存在
+    public Result<Void> grant(@RequestBody GrantAccessRequest req) {
+        for (String permCode : req.getPermCodes()) {
             Long count = projectAccessMapper.selectCount(
                     new LambdaQueryWrapper<ProjectAccess>()
-                            .eq(ProjectAccess::getUserId, userId)
-                            .eq(ProjectAccess::getProjectId, projectId)
+                            .eq(ProjectAccess::getUserId, req.getUserId())
+                            .eq(ProjectAccess::getProjectId, req.getProjectId())
                             .eq(ProjectAccess::getPermCode, permCode));
             if (count == 0) {
                 ProjectAccess access = new ProjectAccess();
-                access.setUserId(userId);
-                access.setProjectId(projectId);
+                access.setUserId(req.getUserId());
+                access.setProjectId(req.getProjectId());
                 access.setPermCode(permCode);
                 projectAccessMapper.insert(access);
             }

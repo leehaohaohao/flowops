@@ -1,17 +1,19 @@
 package com.nexa.flowops.controller;
 
-import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.RequirePermission;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.CreateServiceRequest;
+import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.entity.SysUser;
 import com.nexa.flowops.mapper.SysUserMapper;
 import com.nexa.flowops.service.PermissionService;
 import com.nexa.flowops.service.ServiceMgmtService;
+import com.nexa.flowops.common.BusinessException;
 import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/services")
@@ -36,36 +38,31 @@ public class ServiceController {
         return Result.ok(serviceMgmtService.listByProjectIds(visibleProjectIds));
     }
 
+    @RequirePermission("VIEW")
     @GetMapping("/{id}")
     public Result<DeployService> get(@PathVariable Long id) {
         return Result.ok(serviceMgmtService.getById(id));
     }
 
+    @RequirePermission(value = "EDIT_CONFIG", projectId = "params.projectId")
     @PostMapping("/create")
-    public Result<Void> create(@RequestBody Map<String, Object> params) {
-        // 检查 EDIT_CONFIG 权限
-        SysUser user = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
-        Long projectId = Long.parseLong(String.valueOf(params.get("projectId")));
-        if (user.getIsSuperAdmin() != 1) {
-            var perms = permissionService.getEffectivePermissions(user.getId(), projectId);
-            if (!perms.contains("EDIT_CONFIG")) {
-                return Result.fail(403, "权限不足：需要 EDIT_CONFIG 权限");
-            }
-        }
+    public Result<Void> create(@RequestBody CreateServiceRequest req) {
         try {
-            serviceMgmtService.createService(params);
+            serviceMgmtService.createService(req);
             return Result.ok("创建成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
     }
 
+    @RequirePermission("EDIT_CONFIG")
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> params) {
-        serviceMgmtService.updateService(id, params);
+    public Result<Void> update(@PathVariable Long id, @RequestBody UpdateServiceRequest req) {
+        serviceMgmtService.updateService(id, req);
         return Result.ok("更新成功");
     }
 
+    @RequirePermission("DELETE")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         serviceMgmtService.deleteService(id);

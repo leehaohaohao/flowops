@@ -2,12 +2,13 @@ package com.nexa.flowops.controller;
 
 import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.CreateRoleRequest;
+import com.nexa.flowops.dto.UpdateRoleRequest;
 import com.nexa.flowops.entity.PermRole;
 import com.nexa.flowops.service.RoleService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -38,24 +39,16 @@ public class RoleController {
     }
 
     @PostMapping
-    public Result<PermRole> create(@RequestBody Map<String, Object> params) {
-        String name = (String) params.get("name");
-        Long groupId = Long.parseLong(String.valueOf(params.get("groupId")));
-        String description = (String) params.get("description");
-        @SuppressWarnings("unchecked")
-        List<String> permissions = (List<String>) params.get("permissions");
-        PermRole role = roleService.createCustom(name, groupId, description, permissions);
+    public Result<PermRole> create(@RequestBody CreateRoleRequest req) {
+        PermRole role = roleService.createCustom(req.getName(), req.getGroupId(),
+                req.getDescription(), req.getPermissions());
         return Result.ok("创建成功", role);
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> params) {
-        String name = (String) params.get("name");
-        String description = (String) params.get("description");
-        @SuppressWarnings("unchecked")
-        List<String> permissions = (List<String>) params.get("permissions");
+    public Result<Void> update(@PathVariable Long id, @RequestBody UpdateRoleRequest req) {
         try {
-            roleService.updateCustom(id, name, description, permissions);
+            roleService.updateCustom(id, req.getName(), req.getDescription(), req.getPermissions());
             return Result.ok("更新成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());

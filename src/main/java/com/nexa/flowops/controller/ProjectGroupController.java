@@ -3,6 +3,7 @@ package com.nexa.flowops.controller;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
+import com.nexa.flowops.dto.GroupRequest;
 import com.nexa.flowops.entity.ProjectGroup;
 import com.nexa.flowops.entity.SysUser;
 import com.nexa.flowops.mapper.SysUserMapper;
@@ -33,8 +34,8 @@ public class ProjectGroupController {
 
     @PostMapping
     @SaCheckRole("super_admin")
-    public Result<ProjectGroup> create(@RequestBody Map<String, String> params) {
-        ProjectGroup group = groupService.create(params.get("name"), params.get("description"));
+    public Result<ProjectGroup> create(@RequestBody GroupRequest req) {
+        ProjectGroup group = groupService.create(req.getName(), req.getDescription());
         return Result.ok("创建成功", group);
     }
 
@@ -63,8 +64,8 @@ public class ProjectGroupController {
 
     @PutMapping("/{id}")
     @SaCheckRole("super_admin")
-    public Result<Void> update(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        groupService.update(id, params.get("name"), params.get("description"));
+    public Result<Void> update(@PathVariable Long id, @RequestBody GroupRequest req) {
+        groupService.update(id, req.getName(), req.getDescription());
         return Result.ok("更新成功");
     }
 
