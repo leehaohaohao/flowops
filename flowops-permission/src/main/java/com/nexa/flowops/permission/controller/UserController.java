@@ -44,7 +44,7 @@ public class UserController {
         } else {
             // 主管看自己项目的用户（去重）
             List<Long> projectIds = permissionService.getUserProjects(currentUser.getId())
-                    .stream().filter(g -> (boolean) g.get("isSupervisor"))
+                    .stream().filter(g -> "supervisor".equals(g.get("roleName")))
                     .map(g -> (Long) g.get("id")).toList();
             if (projectIds.isEmpty()) {
                 return Result.ok(List.of());

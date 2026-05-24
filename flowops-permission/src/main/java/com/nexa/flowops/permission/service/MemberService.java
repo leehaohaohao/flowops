@@ -40,7 +40,6 @@ public class MemberService {
             info.put("username", user.getUsername());
             info.put("roleId", member.getRoleId());
             info.put("roleName", role != null ? role.getName() : "unknown");
-            info.put("isSupervisor", role != null && "supervisor".equals(role.getName()));
             result.add(info);
         }
         return result;
