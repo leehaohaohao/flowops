@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.PasswordUtil;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
+import com.nexa.flowops.permission.dto.ProjectRoleAssignment;
 import com.nexa.flowops.permission.entity.*;
 import com.nexa.flowops.permission.mapper.*;
 import org.springframework.stereotype.Service;
@@ -49,42 +50,48 @@ public class UserService {
             throw new BusinessException("用户名「" + req.getUsername() + "」已存在");
         }
 
-        PermRole role = permRoleMapper.selectById(req.getRoleId());
-        if (role == null) {
-            throw new BusinessException("角色不存在");
-        }
-
-        if (!isSuperAdmin && "supervisor".equals(role.getName())) {
-            throw new BusinessException("权限不足：不能分配 supervisor 角色");
-        }
-
         SysUser user = new SysUser();
         user.setUsername(req.getUsername());
         user.setPassword(PasswordUtil.encode(req.getPassword()));
         user.setIsSuperAdmin(0);
         userMapper.insert(user);
 
-        // 解析项目：未指定则归入默认项目
-        Long projectId = req.getProjectId();
-        if (projectId == null) {
+        List<ProjectRoleAssignment> assignments = req.getProjects();
+        if (assignments == null || assignments.isEmpty()) {
+            // 未指定项目，归入默认项目（viewer 角色）
             Project defaultProject = projectService.getDefaultProject();
             if (defaultProject == null) {
                 throw new BusinessException("系统未配置默认项目，请联系管理员");
             }
-            projectId = defaultProject.getId();
+            GroupMember member = new GroupMember();
+            member.setProjectId(defaultProject.getId());
+            member.setUserId(user.getId());
+            member.setRoleId(1L); // viewer
+            groupMemberMapper.insert(member);
+            return;
         }
 
-        GroupMember member = new GroupMember();
-        member.setProjectId(projectId);
-        member.setUserId(user.getId());
-        member.setRoleId(role.getId());
+        for (ProjectRoleAssignment assignment : assignments) {
+            PermRole role = permRoleMapper.selectById(assignment.getRoleId());
+            if (role == null) {
+                throw new BusinessException("角色不存在：roleId=" + assignment.getRoleId());
+            }
+            if (!isSuperAdmin && "supervisor".equals(role.getName())) {
+                throw new BusinessException("权限不足：不能分配 supervisor 角色");
+            }
 
-        List<String> extraPerms = req.getExtraPermissions();
-        if (extraPerms != null && !extraPerms.isEmpty()) {
-            member.setExtraPermissions(String.join(",", extraPerms));
+            GroupMember member = new GroupMember();
+            member.setProjectId(assignment.getProjectId());
+            member.setUserId(user.getId());
+            member.setRoleId(assignment.getRoleId());
+
+            List<String> extraPerms = assignment.getExtraPermissions();
+            if (extraPerms != null && !extraPerms.isEmpty()) {
+                member.setExtraPermissions(String.join(",", extraPerms));
+            }
+
+            groupMemberMapper.insert(member);
         }
-
-        groupMemberMapper.insert(member);
     }
 
     public void deleteUser(Long id) {

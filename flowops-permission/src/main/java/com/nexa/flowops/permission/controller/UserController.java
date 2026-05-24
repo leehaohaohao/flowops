@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
+import com.nexa.flowops.permission.dto.ProjectRoleAssignment;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
@@ -70,19 +71,12 @@ public class UserController {
         SysUser operator = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
         boolean isSuperAdmin = operator.getIsSuperAdmin() == 1;
 
-        // 解析项目：未指定则归入默认项目
-        Long projectId = req.getProjectId();
-        if (projectId == null) {
-            var defaultProject = projectService.getDefaultProject();
-            if (defaultProject == null) {
-                return Result.fail("系统未配置默认项目，请联系管理员");
-            }
-            projectId = defaultProject.getId();
-        }
-
-        if (!isSuperAdmin) {
-            if (!permissionService.isSupervisor(operator.getId(), projectId)) {
-                return Result.fail(403, "只能创建用户到自己管理的项目");
+        // 非超管需要校验每个项目的 supervisor 权限
+        if (!isSuperAdmin && req.getProjects() != null) {
+            for (ProjectRoleAssignment assignment : req.getProjects()) {
+                if (!permissionService.isSupervisor(operator.getId(), assignment.getProjectId())) {
+                    return Result.fail(403, "只能创建用户到自己管理的项目（projectId=" + assignment.getProjectId() + "）");
+                }
             }
         }
 
