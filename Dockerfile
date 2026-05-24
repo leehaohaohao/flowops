@@ -21,5 +21,5 @@ COPY app.jar app.jar
 
 EXPOSE 8080
 
-# 不硬编码 profile，由 docker run -e SPRING_PROFILES_ACTIVE 控制
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 默认 prod，可通过 docker run -e SPRING_PROFILES_ACTIVE=dev 覆盖
+ENTRYPOINT exec java -jar app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}
