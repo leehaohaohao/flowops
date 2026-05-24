@@ -47,3 +47,9 @@ build/
 
 ### Worktrees ###
 .worktrees/
+
+### Frontend build artifacts ###
+src/main/resources/static/assets/
+src/main/resources/static/index.html
+src/main/resources/static/favicon.svg
+src/main/resources/static/icons.svg
