@@ -40,10 +40,11 @@ CREATE TABLE IF NOT EXISTS project (
 
 -- 组成员
 CREATE TABLE IF NOT EXISTS group_member (
-    id       BIGINT AUTO_INCREMENT PRIMARY KEY,
-    group_id BIGINT NOT NULL,
-    user_id  BIGINT NOT NULL,
-    role_id  BIGINT NOT NULL,
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    group_id          BIGINT NOT NULL,
+    user_id           BIGINT NOT NULL,
+    role_id           BIGINT NOT NULL,
+    extra_permissions VARCHAR(500) DEFAULT NULL COMMENT '额外权限码，逗号分隔',
     UNIQUE KEY uk_group_user (group_id, user_id),
     INDEX idx_user_id (user_id)
 );
@@ -132,6 +133,11 @@ INSERT INTO role_permission (role_id, perm_code) VALUES
 -- ============================================
 -- 4. 数据迁移
 -- ============================================
+-- 数据迁移（现有数据兼容）
+-- ============================================
+
+-- 兼容已有表：添加 extra_permissions 列
+ALTER TABLE group_member ADD COLUMN IF NOT EXISTS extra_permissions VARCHAR(500) DEFAULT NULL COMMENT '额外权限码，逗号分隔';
 
 -- 默认项目组和默认项目
 INSERT INTO project_group (id, name, description) VALUES (1, '默认项目组', '系统默认项目组');

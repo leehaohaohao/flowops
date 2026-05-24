@@ -91,6 +91,13 @@ public class PermissionService {
                             .eq(GroupMember::getUserId, userId));
             if (member != null) {
                 permissions.addAll(getRolePermissions(member.getRoleId()));
+                // 合并成员额外权限
+                if (member.getExtraPermissions() != null && !member.getExtraPermissions().isEmpty()) {
+                    for (String p : member.getExtraPermissions().split(",")) {
+                        String trimmed = p.trim();
+                        if (!trimmed.isEmpty()) permissions.add(trimmed);
+                    }
+                }
             }
         }
 
@@ -184,6 +191,9 @@ public class PermissionService {
             info.put("name", group.getName());
             info.put("roleName", role != null ? role.getName() : "unknown");
             info.put("isSupervisor", role != null && "supervisor".equals(role.getName()));
+            if (member.getExtraPermissions() != null && !member.getExtraPermissions().isEmpty()) {
+                info.put("extraPermissions", List.of(member.getExtraPermissions().split(",")));
+            }
             groups.add(info);
         }
         return groups;

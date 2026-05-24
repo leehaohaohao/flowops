@@ -649,14 +649,14 @@ POST /api/users/create
 | `password` | string | 是 | 密码 |
 | `groupId` | long | 是 | 加入的项目组 ID |
 | `roleId` | long | 是 | 基础角色 ID |
-| `extraPermissions` | string[] | 否 | 额外权限码，与角色权限取并集 |
+| `extraPermissions` | string[] | 否 | 额外权限码，与角色权限取并集，存储在成员关系中 |
 
 **权限合并示例：**
 
 选择 `operator` 角色（VIEW + DEPLOY + START + STOP）+ `extraPermissions: ["UPLOAD"]`
 → 最终权限 = VIEW, DEPLOY, START, STOP, UPLOAD
 
-系统会自动创建一个自定义角色（名称为 `operator+`），无需前端额外操作。
+额外权限存储在 `group_member` 表的 `extra_permissions` 字段中，不影响角色定义。
 
 **前端交互建议：**
 
