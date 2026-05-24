@@ -6,6 +6,7 @@ import com.nexa.flowops.common.BusinessException;
 import com.nexa.flowops.common.Result;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.dto.ProjectRoleAssignment;
+import com.nexa.flowops.permission.dto.UpdateUserRequest;
 import com.nexa.flowops.permission.dto.UserVO;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
@@ -81,6 +82,28 @@ public class UserController {
         try {
             userService.createUser(req, operator.getId(), isSuperAdmin);
             return Result.ok("创建成功");
+        } catch (BusinessException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    @PutMapping("/{id}")
+    public Result<Void> update(@PathVariable Long id, @RequestBody UpdateUserRequest req) {
+        SysUser operator = userMapper.selectByUsername(StpUtil.getLoginIdAsString());
+        boolean isSuperAdmin = operator.getIsSuperAdmin() == 1;
+
+        // 非超管需要校验每个项目的 supervisor 权限
+        if (!isSuperAdmin && req.getProjects() != null) {
+            for (ProjectRoleAssignment assignment : req.getProjects()) {
+                if (!permissionService.isSupervisor(operator.getId(), assignment.getProjectId())) {
+                    return Result.fail(403, "只能管理自己负责的项目（projectId=" + assignment.getProjectId() + "）");
+                }
+            }
+        }
+
+        try {
+            userService.updateUser(id, req.getProjects(), isSuperAdmin);
+            return Result.ok("更新成功");
         } catch (BusinessException e) {
             return Result.fail(e.getMessage());
         }
