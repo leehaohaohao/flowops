@@ -174,7 +174,8 @@ public class DeployExecutorService {
                 List<Map<String, Object>> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
                         ? (List<Map<String, Object>>) frontendConfig.get("proxyRules") : Collections.emptyList();
                 String customNginx = frontendConfig != null ? (String) frontendConfig.get("customNginxConfig") : null;
-                generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx);
+                int nginxListenPort = frontendConfig != null ? getInt(frontendConfig, "nginxListenPort", 80) : 80;
+                generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx, nginxListenPort);
             }
             generateComposeYml(volumeDir, service, serviceType, backendConfig, frontendConfig);
 
@@ -290,14 +291,14 @@ public class DeployExecutorService {
     }
 
     @SuppressWarnings("unchecked")
-    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx) throws IOException {
+    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx, int nginxListenPort) throws IOException {
         String content;
         if (customNginx != null && !customNginx.isEmpty()) {
             content = customNginx;
         } else {
             StringBuilder sb = new StringBuilder();
             sb.append("server {\n");
-            sb.append("    listen 80;\n");
+            sb.append("    listen ").append(nginxListenPort).append(";\n");
             sb.append("    server_name localhost;\n");
             sb.append("\n");
             sb.append("    root /usr/share/nginx/html;\n");
@@ -373,10 +374,11 @@ public class DeployExecutorService {
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
         } else if ("frontend".equals(serviceType)) {
+            int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
             sb.append("  frontend:\n");
             sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
             sb.append("    ports:\n");
-            sb.append("      - \"").append(hostPort).append(":80\"\n");
+            sb.append("      - \"").append(hostPort).append(":").append(nginxContainerPort).append("\"\n");
             appendExtraPorts(sb, extraPorts);
             sb.append("    volumes:\n");
             sb.append("      - ./dist:/usr/share/nginx/html\n");
@@ -397,10 +399,13 @@ public class DeployExecutorService {
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
 
+            int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
+            int frontendHostPort = getInt(frontendConfig, "frontendPort", hostPort);
+
             sb.append("  frontend:\n");
             sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
             sb.append("    ports:\n");
-            sb.append("      - \"").append(hostPort).append(":80\"\n");
+            sb.append("      - \"").append(frontendHostPort).append(":").append(nginxContainerPort).append("\"\n");
             sb.append("    volumes:\n");
             sb.append("      - ./dist:/usr/share/nginx/html\n");
             sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
