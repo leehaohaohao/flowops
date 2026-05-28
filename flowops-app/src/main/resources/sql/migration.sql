@@ -127,3 +127,15 @@ UPDATE deploy_service SET project_id = 1 WHERE project_id = 0;
 
 -- admin 密码迁移为 BCrypt（原始密码：admin123）
 UPDATE sys_user SET password = '$2a$10$IwflDmGocTRo44hU9ZvAZeFpZLc1cXd7z/eluLZPPBFtsWRct5GyK' WHERE username = 'admin';
+
+
+-- ============================================
+-- 阶段 5: deployName + remark 字段
+-- ============================================
+
+ALTER TABLE deploy_service ADD COLUMN deploy_name VARCHAR(63) NOT NULL AFTER name;
+ALTER TABLE deploy_service ADD UNIQUE KEY uk_deploy_name (deploy_name);
+ALTER TABLE deploy_service ADD COLUMN remark VARCHAR(500) DEFAULT NULL COMMENT '服务备注' AFTER deploy_name;
+
+-- 已有服务的 deploy_name 回填：使用 id 拼接生成合法值
+UPDATE deploy_service SET deploy_name = CONCAT('service-', id) WHERE deploy_name = '';

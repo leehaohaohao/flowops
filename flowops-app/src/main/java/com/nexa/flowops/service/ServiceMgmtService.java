@@ -10,9 +10,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class ServiceMgmtService {
+
+    private static final Pattern DEPLOY_NAME_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$");
 
     private final DeployServiceMapper serviceMapper;
     private final String storagePath = "/data/flowops/services";
@@ -36,20 +39,23 @@ public class ServiceMgmtService {
     }
 
     public void createService(CreateServiceRequest req) {
+        validateDeployName(req.getDeployName());
+
         Long count = serviceMapper.selectCount(
-                new LambdaQueryWrapper<DeployService>().eq(DeployService::getName, req.getName()));
+                new LambdaQueryWrapper<DeployService>().eq(DeployService::getDeployName, req.getDeployName()));
         if (count > 0) {
-            throw new BusinessException("服务名「" + req.getName() + "」已存在，请更换名称");
+            throw new BusinessException("部署名称「" + req.getDeployName() + "」已存在，请更换");
         }
 
         DeployService service = new DeployService();
         service.setName(req.getName());
-        service.setPort(req.getPort());
-        service.setExtraPorts(req.getExtraPorts());
+        service.setDeployName(req.getDeployName());
+        service.setRemark(req.getRemark());
+        service.setPortMappings(req.getPortMappings());
         service.setServiceType(req.getServiceType());
         service.setServiceConfig(req.getServiceConfig());
         service.setProjectId(req.getProjectId());
-        service.setVolumeDir(storagePath + "/" + req.getName());
+        service.setVolumeDir(storagePath + "/" + req.getDeployName());
         service.setStatus("stopped");
         serviceMapper.insert(service);
 
@@ -64,11 +70,31 @@ public class ServiceMgmtService {
         if (req.getName() != null) {
             service.setName(req.getName());
         }
-        if (req.getPort() != null) {
-            service.setPort(req.getPort());
+        if (req.getDeployName() != null) {
+            validateDeployName(req.getDeployName());
+            if (!req.getDeployName().equals(service.getDeployName())) {
+                Long count = serviceMapper.selectCount(
+                        new LambdaQueryWrapper<DeployService>().eq(DeployService::getDeployName, req.getDeployName()));
+                if (count > 0) {
+                    throw new BusinessException("部署名称「" + req.getDeployName() + "」已存在，请更换");
+                }
+                // rename 物理目录
+                File oldDir = new File(service.getVolumeDir());
+                String newVolumeDir = storagePath + "/" + req.getDeployName();
+                if (oldDir.exists()) {
+                    if (!oldDir.renameTo(new File(newVolumeDir))) {
+                        throw new BusinessException("重命名目录失败: " + service.getVolumeDir());
+                    }
+                }
+                service.setDeployName(req.getDeployName());
+                service.setVolumeDir(newVolumeDir);
+            }
         }
-        if (req.getExtraPorts() != null) {
-            service.setExtraPorts(req.getExtraPorts());
+        if (req.getRemark() != null) {
+            service.setRemark(req.getRemark());
+        }
+        if (req.getPortMappings() != null) {
+            service.setPortMappings(req.getPortMappings());
         }
         if (req.getServiceType() != null) {
             service.setServiceType(req.getServiceType());
@@ -77,6 +103,15 @@ public class ServiceMgmtService {
             service.setServiceConfig(req.getServiceConfig());
         }
         serviceMapper.updateById(service);
+    }
+
+    private void validateDeployName(String deployName) {
+        if (deployName == null || deployName.isBlank()) {
+            throw new BusinessException("部署名称不能为空");
+        }
+        if (!DEPLOY_NAME_PATTERN.matcher(deployName).matches()) {
+            throw new BusinessException("部署名称只能包含小写字母、数字和连字符，且首尾为字母或数字，长度 2-63");
+        }
     }
 
     public void deleteService(Long id) {

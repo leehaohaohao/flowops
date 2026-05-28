@@ -5,8 +5,9 @@ import lombok.Data;
 @Data
 public class UpdateServiceRequest {
     private String name;
-    private Integer port;
-    private String extraPorts;
+    private String deployName;
+    private String remark;
+    private String portMappings;
     private String serviceType;
     private String serviceConfig;
 }

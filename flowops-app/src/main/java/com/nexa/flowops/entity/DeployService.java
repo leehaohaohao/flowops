@@ -10,9 +10,10 @@ public class DeployService {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long projectId;        // 所属项目 ID
-    private String name;           // 服务名称
-    private Integer port;          // 暴露端口
-    private String extraPorts;     // 额外端口映射 JSON: [{"hostPort":9090,"containerPort":9090}]
+    private String name;           // 服务名称（UI 显示）
+    private String deployName;     // 部署名称（Docker Compose 项目名，hostname 规范）
+    private String remark;         // 服务备注
+    private String portMappings;   // 统一端口映射 JSON: List<PortMapping>
     private String volumeDir;      // 挂载目录
     private String serviceType;    // 服务类型：backend / frontend / fullstack
     private String serviceConfig;  // 结构化配置 JSON

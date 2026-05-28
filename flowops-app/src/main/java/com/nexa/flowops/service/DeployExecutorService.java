@@ -4,6 +4,7 @@ import com.nexa.flowops.common.Result;
 import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
+import com.nexa.flowops.entity.PortMapping;
 import com.nexa.flowops.mapper.DeployRecordMapper;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import com.nexa.flowops.util.DockerUtil;
@@ -19,6 +20,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.zip.ZipInputStream;
 import java.util.Collections;
 import java.util.List;
@@ -156,16 +158,29 @@ public class DeployExecutorService {
                     ? (Map<String, Object>) config.get("frontend") : null;
             String serviceType = service.getServiceType();
 
+            // 解析 portMappings（优先使用新字段，为空时 fallback 到旧字段）
+            List<PortMapping> portMappings = parsePortMappings(service.getPortMappings());
+
             String volumeDir = service.getVolumeDir();
 
             // 根据服务类型生成部署文件
             if ("backend".equals(serviceType) || "fullstack".equals(serviceType)) {
-                generateDockerfile(volumeDir, backendConfig);
+                generateDockerfile(volumeDir, backendConfig, portMappings, serviceType);
             }
             if ("frontend".equals(serviceType) || "fullstack".equals(serviceType)) {
                 String proxyTarget;
                 if ("fullstack".equals(serviceType)) {
+                    // 优先从 portMappings 获取 backend expose 端口
                     int containerPort = getInt(backendConfig, "containerPort", 8080);
+                    if (!portMappings.isEmpty()) {
+                        List<PortMapping> backendMappings = getMappingsByTarget(portMappings, "backend");
+                        for (PortMapping pm : backendMappings) {
+                            if (pm.isExpose()) {
+                                containerPort = pm.getContainerPort();
+                                break;
+                            }
+                        }
+                    }
                     proxyTarget = "http://backend:" + containerPort;
                 } else {
                     proxyTarget = frontendConfig != null && frontendConfig.containsKey("backendUrl")
@@ -177,7 +192,7 @@ public class DeployExecutorService {
                 int nginxListenPort = frontendConfig != null ? getInt(frontendConfig, "nginxListenPort", 80) : 80;
                 generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx, nginxListenPort);
             }
-            generateComposeYml(volumeDir, service, serviceType, backendConfig, frontendConfig);
+            generateComposeYml(volumeDir, service, serviceType, backendConfig, frontendConfig, portMappings);
 
             // 执行 docker compose
             String composePath = volumeDir + "/docker-compose.yml";
@@ -256,7 +271,8 @@ public class DeployExecutorService {
 
     // ==================== 文件生成 ====================
 
-    private void generateDockerfile(String volumeDir, Map<String, Object> backendConfig) throws IOException {
+    private void generateDockerfile(String volumeDir, Map<String, Object> backendConfig,
+                                     List<PortMapping> portMappings, String serviceType) throws IOException {
         String baseImage = getString(backendConfig, "baseImage", "openjdk:17-jdk-slim");
         int containerPort = getInt(backendConfig, "containerPort", 8080);
         String startupCommand = getString(backendConfig, "startupCommand", "java -jar /app/app.jar");
@@ -265,7 +281,23 @@ public class DeployExecutorService {
         sb.append("FROM ").append(baseImage).append("\n");
         sb.append("WORKDIR /app\n");
         sb.append("COPY app.jar /app/app.jar\n");
-        sb.append("EXPOSE ").append(containerPort).append("\n");
+
+        // EXPOSE: 优先从 portMappings 收集所有 containerPort
+        if (!portMappings.isEmpty()) {
+            Set<Integer> exposePorts = new LinkedHashSet<>();
+            for (PortMapping pm : portMappings) {
+                // backend 模式收集全部；fullstack 只收集 backend target
+                if ("fullstack".equals(serviceType) && !"backend".equals(pm.getTarget())) {
+                    continue;
+                }
+                exposePorts.add(pm.getContainerPort());
+            }
+            sb.append("EXPOSE ").append(
+                    exposePorts.stream().map(String::valueOf).collect(Collectors.joining(" "))
+            ).append("\n");
+        } else {
+            sb.append("EXPOSE ").append(containerPort).append("\n");
+        }
 
         // 添加环境变量 ENV 指令
         if (backendConfig != null && backendConfig.containsKey("envVars")) {
@@ -357,85 +389,210 @@ public class DeployExecutorService {
     @SuppressWarnings("unchecked")
     private void generateComposeYml(String volumeDir, DeployService service, String serviceType,
                                      Map<String, Object> backendConfig,
-                                     Map<String, Object> frontendConfig) throws IOException {
-        int hostPort = service.getPort();
-        List<Map<String, Integer>> extraPorts = parseExtraPorts(service.getExtraPorts());
+                                     Map<String, Object> frontendConfig,
+                                     List<PortMapping> portMappings) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("services:\n");
 
-        if ("backend".equals(serviceType)) {
-            int containerPort = getInt(backendConfig, "containerPort", 8080);
-            sb.append("  backend:\n");
-            sb.append("    build: .\n");
-            sb.append("    ports:\n");
-            sb.append("      - \"").append(hostPort).append(":").append(containerPort).append("\"\n");
-            appendExtraPorts(sb, extraPorts);
-            appendVolumes(sb, backendConfig);
-            appendEnvironment(sb, backendConfig);
-            sb.append("    restart: unless-stopped\n");
-        } else if ("frontend".equals(serviceType)) {
-            int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
-            sb.append("  frontend:\n");
-            sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-            sb.append("    ports:\n");
-            sb.append("      - \"").append(hostPort).append(":").append(nginxContainerPort).append("\"\n");
-            appendExtraPorts(sb, extraPorts);
-            sb.append("    volumes:\n");
-            sb.append("      - ./dist:/usr/share/nginx/html\n");
-            sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-            sb.append("    restart: unless-stopped\n");
-        } else if ("fullstack".equals(serviceType)) {
-            int containerPort = getInt(backendConfig, "containerPort", 8080);
-
-            sb.append("  backend:\n");
-            sb.append("    build: .\n");
-            sb.append("    expose:\n");
-            sb.append("      - \"").append(containerPort).append("\"\n");
-            if (!extraPorts.isEmpty()) {
-                sb.append("    ports:\n");
-                appendExtraPorts(sb, extraPorts);
+        if (!portMappings.isEmpty()) {
+            // ===== 新逻辑：从 portMappings 生成 =====
+            if ("backend".equals(serviceType)) {
+                generateBackendComposeFromMappings(sb, portMappings, backendConfig);
+            } else if ("frontend".equals(serviceType)) {
+                generateFrontendComposeFromMappings(sb, portMappings, frontendConfig);
+            } else if ("fullstack".equals(serviceType)) {
+                List<PortMapping> backendMappings = getMappingsByTarget(portMappings, "backend");
+                List<PortMapping> frontendMappings = getMappingsByTarget(portMappings, "frontend");
+                // backend target 默认
+                if (backendMappings.isEmpty()) {
+                    backendMappings = getMappingsByTarget(portMappings, null);
+                }
+                generateFullstackBackendComposeFromMappings(sb, backendMappings, backendConfig);
+                generateFullstackFrontendComposeFromMappings(sb, frontendMappings, frontendConfig);
             }
-            appendVolumes(sb, backendConfig);
-            appendEnvironment(sb, backendConfig);
-            sb.append("    restart: unless-stopped\n");
+        } else {
+            // ===== 旧逻辑 fallback（portMappings 为空时，从 serviceConfig 读取）=====
+            if ("backend".equals(serviceType)) {
+                int containerPort = getInt(backendConfig, "containerPort", 8080);
+                sb.append("  backend:\n");
+                sb.append("    build: .\n");
+                sb.append("    ports:\n");
+                sb.append("      - \"").append(containerPort).append(":").append(containerPort).append("\"\n");
+                appendVolumes(sb, backendConfig);
+                appendEnvironment(sb, backendConfig);
+                sb.append("    restart: unless-stopped\n");
+            } else if ("frontend".equals(serviceType)) {
+                int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
+                sb.append("  frontend:\n");
+                sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
+                sb.append("    ports:\n");
+                sb.append("      - \"").append(nginxContainerPort).append(":").append(nginxContainerPort).append("\"\n");
+                sb.append("    volumes:\n");
+                sb.append("      - ./dist:/usr/share/nginx/html\n");
+                sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
+                sb.append("    restart: unless-stopped\n");
+            } else if ("fullstack".equals(serviceType)) {
+                int containerPort = getInt(backendConfig, "containerPort", 8080);
 
-            int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
-            int frontendHostPort = getInt(frontendConfig, "frontendPort", hostPort);
+                sb.append("  backend:\n");
+                sb.append("    build: .\n");
+                sb.append("    expose:\n");
+                sb.append("      - \"").append(containerPort).append("\"\n");
+                appendVolumes(sb, backendConfig);
+                appendEnvironment(sb, backendConfig);
+                sb.append("    restart: unless-stopped\n");
 
-            sb.append("  frontend:\n");
-            sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-            sb.append("    ports:\n");
-            sb.append("      - \"").append(frontendHostPort).append(":").append(nginxContainerPort).append("\"\n");
-            sb.append("    volumes:\n");
-            sb.append("      - ./dist:/usr/share/nginx/html\n");
-            sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-            sb.append("    depends_on:\n");
-            sb.append("      - backend\n");
-            sb.append("    restart: unless-stopped\n");
+                int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
+                int frontendHostPort = getInt(frontendConfig, "frontendPort", 80);
+
+                sb.append("  frontend:\n");
+                sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
+                sb.append("    ports:\n");
+                sb.append("      - \"").append(frontendHostPort).append(":").append(nginxContainerPort).append("\"\n");
+                sb.append("    volumes:\n");
+                sb.append("      - ./dist:/usr/share/nginx/html\n");
+                sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
+                sb.append("    depends_on:\n");
+                sb.append("      - backend\n");
+                sb.append("    restart: unless-stopped\n");
+            }
         }
 
         Files.writeString(new File(volumeDir, "docker-compose.yml").toPath(), sb.toString());
         log.info("[{}] 已生成 docker-compose.yml (type={})", service.getName(), serviceType);
     }
 
-    private List<Map<String, Integer>> parseExtraPorts(String extraPortsJson) {
-        if (extraPortsJson == null || extraPortsJson.isBlank()) return List.of();
+    // ===== portMappings 生成辅助方法 =====
+
+    private void generateBackendComposeFromMappings(StringBuilder sb, List<PortMapping> portMappings,
+                                                     Map<String, Object> backendConfig) {
+        List<PortMapping> exposeMappings = getExposeMappings(portMappings);
+        List<PortMapping> hostMappings = getHostPortMappings(portMappings);
+
+        sb.append("  backend:\n");
+        sb.append("    build: .\n");
+
+        if (!exposeMappings.isEmpty()) {
+            sb.append("    expose:\n");
+            for (PortMapping pm : exposeMappings) {
+                sb.append("      - \"").append(pm.getContainerPort()).append("\"\n");
+            }
+        }
+        if (!hostMappings.isEmpty()) {
+            sb.append("    ports:\n");
+            for (PortMapping pm : hostMappings) {
+                sb.append("      - \"").append(pm.getHostPort()).append(":").append(pm.getContainerPort()).append("\"\n");
+            }
+        }
+
+        appendVolumes(sb, backendConfig);
+        appendEnvironment(sb, backendConfig);
+        sb.append("    restart: unless-stopped\n");
+    }
+
+    private void generateFrontendComposeFromMappings(StringBuilder sb, List<PortMapping> portMappings,
+                                                      Map<String, Object> frontendConfig) {
+        PortMapping primary = getPrimaryMapping(portMappings);
+        if (primary == null) primary = portMappings.get(0);
+
+        sb.append("  frontend:\n");
+        sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
+        sb.append("    ports:\n");
+        sb.append("      - \"").append(primary.getHostPort()).append(":").append(primary.getContainerPort()).append("\"\n");
+        sb.append("    volumes:\n");
+        sb.append("      - ./dist:/usr/share/nginx/html\n");
+        sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
+        sb.append("    restart: unless-stopped\n");
+    }
+
+    private void generateFullstackBackendComposeFromMappings(StringBuilder sb, List<PortMapping> backendMappings,
+                                                              Map<String, Object> backendConfig) {
+        List<PortMapping> exposeMappings = getExposeMappings(backendMappings);
+        List<PortMapping> hostMappings = getHostPortMappings(backendMappings);
+
+        sb.append("  backend:\n");
+        sb.append("    build: .\n");
+
+        if (!exposeMappings.isEmpty()) {
+            sb.append("    expose:\n");
+            for (PortMapping pm : exposeMappings) {
+                sb.append("      - \"").append(pm.getContainerPort()).append("\"\n");
+            }
+        }
+        if (!hostMappings.isEmpty()) {
+            sb.append("    ports:\n");
+            for (PortMapping pm : hostMappings) {
+                sb.append("      - \"").append(pm.getHostPort()).append(":").append(pm.getContainerPort()).append("\"\n");
+            }
+        }
+
+        appendVolumes(sb, backendConfig);
+        appendEnvironment(sb, backendConfig);
+        sb.append("    restart: unless-stopped\n");
+    }
+
+    private void generateFullstackFrontendComposeFromMappings(StringBuilder sb, List<PortMapping> frontendMappings,
+                                                               Map<String, Object> frontendConfig) {
+        PortMapping primary = frontendMappings.isEmpty() ? null : getPrimaryMapping(frontendMappings);
+        if (primary == null) primary = frontendMappings.isEmpty() ? null : frontendMappings.get(0);
+        if (primary == null) return;
+
+        sb.append("  frontend:\n");
+        sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
+        sb.append("    ports:\n");
+        sb.append("      - \"").append(primary.getHostPort()).append(":").append(primary.getContainerPort()).append("\"\n");
+        sb.append("    volumes:\n");
+        sb.append("      - ./dist:/usr/share/nginx/html\n");
+        sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
+        sb.append("    depends_on:\n");
+        sb.append("      - backend\n");
+        sb.append("    restart: unless-stopped\n");
+    }
+
+    // ===== portMappings 工具方法 =====
+
+    private List<PortMapping> parsePortMappings(String json) {
+        if (json == null || json.isBlank()) return List.of();
         try {
-            return new ObjectMapper().readValue(extraPortsJson, new TypeReference<>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            log.warn("解析 extraPorts 失败: {}", e.getMessage());
+            log.warn("解析 portMappings 失败: {}", e.getMessage());
             return List.of();
         }
     }
 
-    private void appendExtraPorts(StringBuilder sb, List<Map<String, Integer>> extraPorts) {
-        for (Map<String, Integer> ep : extraPorts) {
-            Integer hp = ep.get("hostPort");
-            Integer cp = ep.get("containerPort");
-            if (hp != null && cp != null) {
-                sb.append("      - \"").append(hp).append(":").append(cp).append("\"\n");
+    private PortMapping getPrimaryMapping(List<PortMapping> mappings) {
+        for (PortMapping pm : mappings) {
+            if (pm.isPrimary()) return pm;
+        }
+        return null;
+    }
+
+    private List<PortMapping> getMappingsByTarget(List<PortMapping> mappings, String target) {
+        List<PortMapping> result = new ArrayList<>();
+        for (PortMapping pm : mappings) {
+            String pmTarget = pm.getTarget() != null ? pm.getTarget() : "backend";
+            if (pmTarget.equals(target != null ? target : "backend")) {
+                result.add(pm);
             }
         }
+        return result;
+    }
+
+    private List<PortMapping> getExposeMappings(List<PortMapping> mappings) {
+        List<PortMapping> result = new ArrayList<>();
+        for (PortMapping pm : mappings) {
+            if (pm.isExpose()) result.add(pm);
+        }
+        return result;
+    }
+
+    private List<PortMapping> getHostPortMappings(List<PortMapping> mappings) {
+        List<PortMapping> result = new ArrayList<>();
+        for (PortMapping pm : mappings) {
+            if (!pm.isExpose() && pm.getHostPort() != null) result.add(pm);
+        }
+        return result;
     }
 
     @SuppressWarnings("unchecked")

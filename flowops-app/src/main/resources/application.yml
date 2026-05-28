@@ -12,6 +12,9 @@ spring:
 # 服务端口
 server:
   port: 8080
+  tomcat:
+    connection-timeout: 300s
+    max-swallow-size: 500MB
 
 # MyBatis-Plus 配置
 mybatis-plus:

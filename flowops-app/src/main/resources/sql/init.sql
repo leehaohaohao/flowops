@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS sys_user (
 
 CREATE TABLE IF NOT EXISTS deploy_service (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    deploy_name VARCHAR(63) NOT NULL UNIQUE,
+    remark VARCHAR(500) DEFAULT NULL COMMENT '服务备注',
     port INT NOT NULL,
     volume_dir VARCHAR(255),
     service_type VARCHAR(20) NOT NULL DEFAULT 'backend',

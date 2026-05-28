@@ -5,9 +5,10 @@ import lombok.Data;
 @Data
 public class CreateServiceRequest {
     private String name;
+    private String deployName;
+    private String remark;
     private Long projectId;
-    private Integer port;
-    private String extraPorts;
+    private String portMappings;
     private String serviceType;
     private String serviceConfig;
 }
