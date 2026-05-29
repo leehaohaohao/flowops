@@ -2,30 +2,27 @@
 
 ## 2.2.0 (2026-05-29)
 
-### 端口映射重构
+### 新功能
 
-- 新增 `PortMapping` 实体，统一 `port_mappings` JSON 字段替代原 `port` / `extraPorts` 字段
-- 支持三种端口类型：宿主机映射（`host`）、内部暴露（`expose`）、多端口 EXPOSE（`multiple`）
-- DeployExecutorService 从 `portMappings` 自动生成 Dockerfile EXPOSE 和 compose ports/expose 配置
-- fullstack/frontend 模式支持自定义 nginx 端口配置，不再硬编码 listen 80
-
-### 部署名称解耦
-
-- 新增 `deploy_name` 字段（hostname 规范），用于 Docker Compose 项目命名
-- `name` 字段仅用于 UI 显示，不再参与容器/目录命名
-- ServiceMgmtService 支持 deployName 格式校验、唯一性校验、目录 rename
+- 新增 `PortMapping` 实体，支持统一端口映射管理（host / expose / multiple 三种类型）
+- 新增 `deploy_name` 字段，Docker Compose 项目命名与 UI 显示名称解耦
 - 新增 `remark` 备注字段
+- 新增数据迁移服务，支持旧数据平滑迁移至 `port_mappings` 格式
 
-### 数据迁移
+### 优化
 
-- 新增 MigrationService/Controller 支持平滑迁移旧数据到 port_mappings 格式
-- 迁移脚本：`V2_1_0__add_port_mappings.sql`、`V2_2_0__add_deploy_name.sql`
+- `port_mappings` JSON 字段替代原 `port` / `extraPorts`，统一端口配置模型
+- fullstack / frontend 模式支持自定义 nginx 端口，不再硬编码 listen 80
+- 服务名称增加 `deployName` 格式校验与唯一性校验
+- 上传接口超时时间增大，避免大文件上传超时
 
-### 其他
+### 移除
 
-- 上传超时调大 `server.tomcat.connection-timeout`
-- 移除旧 `port` / `extraPorts` 字段及所有引用
-- 文档目录统一 YYYY-MM-DD 前缀命名规范
+- 移除旧 `port` / `extraPorts` 字段及所有相关引用
+
+### 文档
+
+- 文档目录统一 `YYYY-MM-DD` 前缀命名规范
 
 ---
 
