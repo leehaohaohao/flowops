@@ -273,14 +273,34 @@ public class DeployExecutorService {
 
     private void generateDockerfile(String volumeDir, Map<String, Object> backendConfig,
                                      List<PortMapping> portMappings, String serviceType) throws IOException {
-        String baseImage = getString(backendConfig, "baseImage", "openjdk:17-jdk-slim");
+        String runtime = getString(backendConfig, "runtime", "java");
+
+        // 根据 runtime 设置不同的默认值
+        String defaultBaseImage;
+        String defaultStartupCommand;
+        if ("go".equals(runtime)) {
+            defaultBaseImage = "golang:1.26.3-alpine";
+            defaultStartupCommand = "/app/app";
+        } else {
+            defaultBaseImage = "openjdk:17-jdk-slim";
+            defaultStartupCommand = "java -jar /app/app.jar";
+        }
+
+        String baseImage = getString(backendConfig, "baseImage", defaultBaseImage);
         int containerPort = getInt(backendConfig, "containerPort", 8080);
-        String startupCommand = getString(backendConfig, "startupCommand", "java -jar /app/app.jar");
+        String startupCommand = getString(backendConfig, "startupCommand", defaultStartupCommand);
 
         StringBuilder sb = new StringBuilder();
         sb.append("FROM ").append(baseImage).append("\n");
         sb.append("WORKDIR /app\n");
-        sb.append("COPY app.jar /app/app.jar\n");
+
+        // 根据 runtime 生成不同的 COPY 指令
+        if ("go".equals(runtime)) {
+            sb.append("COPY app /app/app\n");
+            sb.append("RUN chmod +x /app/app\n");
+        } else {
+            sb.append("COPY app.jar /app/app.jar\n");
+        }
 
         // EXPOSE: 优先从 portMappings 收集所有 containerPort
         if (!portMappings.isEmpty()) {

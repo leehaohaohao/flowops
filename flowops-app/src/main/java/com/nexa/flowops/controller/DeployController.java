@@ -27,7 +27,14 @@ public class DeployController {
             @RequestParam(value = "type", defaultValue = "jar") String type) {
         String uploadPath = deployService.getUploadPath(serviceId, type);
         try {
-            String filename = "jar".equals(type) ? "app.jar" : file.getOriginalFilename();
+            String filename;
+            if ("jar".equals(type)) {
+                filename = "app.jar";
+            } else if ("binary".equals(type)) {
+                filename = "app";
+            } else {
+                filename = file.getOriginalFilename();
+            }
             File targetFile = new File(uploadPath, filename);
             file.transferTo(targetFile);
             return Result.ok("上传成功", filename);

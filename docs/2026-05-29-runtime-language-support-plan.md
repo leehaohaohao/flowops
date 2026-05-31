@@ -23,7 +23,7 @@
 {
   "backend": {
     "runtime": "go",          // 新增: java | go（后续扩展 node/python）
-    "baseImage": "alpine:latest",
+    "baseImage": "golang:1.26.3-alpine",
     "startupCommand": "/app/app",
     "envVars": {},
     "dataMount": {}
@@ -45,7 +45,7 @@
 | runtime | 标签  | 默认 baseImage          | 默认 startupCommand         | 上传产物   |
 |---------|-------|------------------------|----------------------------|-----------|
 | java    | Java  | openjdk:17-jdk-slim    | java -jar /app/app.jar     | .jar      |
-| go      | Go    | alpine:latest          | /app/app                   | 二进制文件  |
+| go      | Go    | golang:1.26.3-alpine   | /app/app                   | 二进制文件  |
 
 #### 前端运行时（仅展示标签）
 
@@ -68,7 +68,7 @@
 - 从 `backendConfig` 读取 `runtime` 字段，默认 `"java"`（向后兼容）
 - 根据 runtime 分支：
   - **java**: 保持现有逻辑不变（`COPY app.jar`, 默认 `openjdk:17-jdk-slim`）
-  - **go**: `COPY app /app/app` + `RUN chmod +x /app/app`，默认 `alpine:latest`
+  - **go**: `COPY app /app/app` + `RUN chmod +x /app/app`，默认 `golang:1.26.3-alpine`
 - 其余逻辑（EXPOSE、ENV、ENTRYPOINT）不变，仍由用户配置驱动
 
 ### Step 2: 后端 — 上传逻辑适配
@@ -92,7 +92,7 @@
 - 后端配置区新增 `<Select>` — "运行时"，选项：`Java` / `Go`
 - 选择 runtime 后自动填充默认值：
   - `java`: baseImage → `openjdk:17-jdk-slim`, startupCommand → `java -jar /app/app.jar`
-  - `go`: baseImage → `alpine:latest`, startupCommand → `/app/app`
+  - `go`: baseImage → `golang:1.26.3-alpine`, startupCommand → `/app/app`
 - 前端配置区新增运行时选择（vue / react / static），仅做标签用途
 - `collectConfig()` 中将 runtime 写入 backend/frontend 子对象
 - 编辑模式加载时从 serviceConfig 读取 runtime 并回填
