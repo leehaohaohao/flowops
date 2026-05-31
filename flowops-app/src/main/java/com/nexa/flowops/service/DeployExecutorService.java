@@ -290,6 +290,15 @@ public class DeployExecutorService {
         int containerPort = getInt(backendConfig, "containerPort", 8080);
         String startupCommand = getString(backendConfig, "startupCommand", defaultStartupCommand);
 
+        // 兜底：如果显式值是另一种 runtime 的默认值，替换为当前 runtime 的默认值
+        if ("go".equals(runtime)) {
+            if ("openjdk:17-jdk-slim".equals(baseImage)) baseImage = defaultBaseImage;
+            if ("java -jar /app/app.jar".equals(startupCommand)) startupCommand = defaultStartupCommand;
+        } else {
+            if ("golang:1.26.3-alpine".equals(baseImage)) baseImage = defaultBaseImage;
+            if ("/app/app".equals(startupCommand)) startupCommand = defaultStartupCommand;
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("FROM ").append(baseImage).append("\n");
         sb.append("WORKDIR /app\n");
