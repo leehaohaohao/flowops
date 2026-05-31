@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0 (2026-05-31)
+
+### 新功能
+
+- 新增运行时语言（runtime）概念，serviceConfig 中 backend/frontend 支持 `runtime` 字段
+- 后端 Dockerfile 生成根据 runtime 自动适配（java / go）
+- Go 运行时默认使用 `golang:1.26.3-alpine` 镜像，生成 `COPY app` + `chmod +x` 指令
+- 新增 `type=binary` 上传类型，Go 二进制产物强制命名为 `app`
+- 设计文档 Go 镜像版本锁定为 `golang:1.26.3-alpine`
+
+---
+
 ## 2.2.0 (2026-05-29)
 
 ### 新功能
