@@ -1,7 +1,7 @@
 package com.nexa.flowops.permission.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.base.BusinessException;
 import com.nexa.flowops.permission.entity.GroupMember;
 import com.nexa.flowops.permission.entity.Project;
 import com.nexa.flowops.permission.mapper.GroupMemberMapper;

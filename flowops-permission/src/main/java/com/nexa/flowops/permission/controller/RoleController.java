@@ -1,7 +1,7 @@
 package com.nexa.flowops.permission.controller;
 
-import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.BusinessException;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.permission.dto.CreateRoleRequest;
 import com.nexa.flowops.permission.dto.UpdateRoleRequest;
 import com.nexa.flowops.permission.entity.PermRole;

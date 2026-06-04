@@ -1,4 +1,4 @@
-package com.nexa.flowops.common;
+package com.nexa.flowops.common.anno;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

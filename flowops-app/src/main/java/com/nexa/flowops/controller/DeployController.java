@@ -1,7 +1,7 @@
 package com.nexa.flowops.controller;
 
-import com.nexa.flowops.common.RequirePermission;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.anno.RequirePermission;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.service.DeployExecutorService;
 import org.springframework.web.bind.annotation.*;

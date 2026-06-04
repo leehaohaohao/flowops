@@ -2,7 +2,7 @@ package com.nexa.flowops.permission.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.permission.dto.GrantAccessRequest;
 import com.nexa.flowops.permission.entity.ProjectAccess;
 import com.nexa.flowops.permission.mapper.ProjectAccessMapper;

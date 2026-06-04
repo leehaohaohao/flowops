@@ -1,8 +1,8 @@
 package com.nexa.flowops.permission.controller;
 
-import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.RequirePermission;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.BusinessException;
+import com.nexa.flowops.common.anno.RequirePermission;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.permission.dto.AddMemberRequest;
 import com.nexa.flowops.permission.dto.MemberVO;
 import com.nexa.flowops.permission.dto.UpdateMemberRoleRequest;

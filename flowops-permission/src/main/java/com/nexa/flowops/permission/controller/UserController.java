@@ -2,8 +2,8 @@ package com.nexa.flowops.permission.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
-import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.BusinessException;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.permission.dto.AssignableVO;
 import com.nexa.flowops.permission.dto.CreateUserRequest;
 import com.nexa.flowops.permission.dto.ProjectRoleAssignment;

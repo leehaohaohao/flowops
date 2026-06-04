@@ -42,9 +42,24 @@ public interface LogSource {
 **新文件**: `flowops-app/src/main/java/com/nexa/flowops/service/log/LocalDockerLogSource.java`
 
 - `@Component`，注入 `@Value("${app.logs.path}")` 和 `DeployServiceMapper`
-- `listFiles`: 扫描 `/data/flowops/logs/{projectId}/{serviceId}/{type}/` 目录，按 date 前缀过滤
-- `readContent`: 使用 `RandomAccessFile` 读取，含路径遍历校验（`Path.resolve().normalize()` 验证前缀）
-- `listDates`: 从文件名中提取唯一日期前缀
+
+目录结构：
+```
+/data/flowops/logs/
+  └── {projectId}/
+      └── {serviceId}/
+          ├── deploy/
+          │   └── {yyyy-MM-dd}/
+          │       ├── 14-30-22.log
+          │       ├── 14-30-22-2.log   (同秒内多次部署)
+          │       └── 14-30-22.log.1   (超100MB拆分)
+          └── app/
+              └── {yyyy-MM-dd}/
+                  └── ...              (容器内应用自行组织)
+```
+- `listFiles`: 扫描 `/data/flowops/logs/{projectId}/{serviceId}/{type}/{date}/` 子目录，返回该目录下的日志文件名列表
+- `readContent`: 路径拼接 `/data/flowops/logs/{projectId}/{serviceId}/{type}/{date}/{filename}`，使用 `RandomAccessFile` 读取，含路径遍历校验（`Path.resolve().normalize()` 验证前缀）
+- `listDates`: 列出 `/data/flowops/logs/{projectId}/{serviceId}/{type}/` 下的所有子目录名（即日期目录），返回排序后的日期列表
 
 ---
 
@@ -57,9 +72,10 @@ public interface LogSource {
 - 删除硬编码 `logBasePath`，注入 `LogSource` 接口
 - 新方法签名：
   - `listLogFiles(Long serviceId, String type, String date)` → `List<String>`
-  - `getLogContent(Long serviceId, String type, String filename, long offset, long limit)` → `String`
+  - `getLogContent(Long serviceId, String type, String date, String filename, long offset, long limit)` → `String`
   - `listLogDates(Long serviceId, String type)` → `List<String>`
 - 添加 `validateFilename()` 方法，拒绝 `..`、`/`、`\`
+- 添加 `validateDate()` 方法，校验日期格式 `yyyy-MM-dd`
 
 ### Step 2.2: 重构 LogController.java
 
@@ -68,7 +84,7 @@ public interface LogSource {
 - 所有端点添加 `@RequirePermission(value = "VIEW", projectId = "serviceId")`
 - 新端点：
   - `GET /api/logs/list?serviceId=&type=&date=`
-  - `GET /api/logs/content?serviceId=&type=&filename=&offset=&limit=`
+  - `GET /api/logs/content?serviceId=&type=&date=&filename=&offset=&limit=`
   - `GET /api/logs/dates?serviceId=&type=`
 - `PermissionAspect.resolveLong(pjp, "serviceId")` 会从 `@RequestParam` 中获取 serviceId，再通过 `permissionService.getProjectIdByServiceId()` 转换为 projectId
 
@@ -104,11 +120,14 @@ public interface LogSource {
 **2.6a - 日志输出路径** (line 150):
 ```java
 // 旧: storagePath + "/logs/" + service.getName() + "-" + System.currentTimeMillis() + ".log"
-// 新: logsBasePath + "/" + service.getProjectId() + "/" + serviceId + "/deploy/" + today + ".log"
+// 新: logsBasePath + "/" + service.getProjectId() + "/" + serviceId + "/deploy/" + today + "/" + time + ".log"
+// 例: /data/flowops/logs/1/5/deploy/2026-06-04/14-30-22.log
 ```
 - 注入 `@Value("${app.logs.path}")` 作为 `logsBasePath`
+- 文件名使用部署时刻的时分秒（`HH-mm-ss.log`），同一秒内多次部署追加序号（`HH-mm-ss-2.log`）
+- 写入前 `mkdirs()` 创建日期目录
 - 写入改为 `StandardOpenOption.APPEND`
-- 增加文件大小检测：超过 100MB 时创建 `{date}-2.log`、`{date}-3.log`...
+- 增加文件大小检测：超过 100MB 时创建 `{time}-2.log`、`{time}-3.log`...
 
 **2.6b - 补上 logPath 赋值**:
 ```java
@@ -119,6 +138,7 @@ record.setLogPath(logPath);  // 当前从未调用
 - 解析 `serviceConfig.appLogPath`
 - 若存在，在 `generateComposeYml()` 中为 backend 服务添加:
   `- /data/flowops/logs/{projectId}/{serviceId}/app:{appLogPath}`
+  （应用日志由容器内进程自行按日期组织目录，宿主机侧不做日期拆分）
 - 添加 helper 方法 `appendAppLogVolume(StringBuilder sb, DeployService service)`
 
 ---
@@ -175,10 +195,10 @@ public long countRunningByProjectId(Long projectId) {
 **文件**: `flowops-front/src/api/logs.ts`
 
 ```typescript
-getLogFiles(serviceId, type, date?)    // GET /api/logs/list
-getLogDates(serviceId, type)           // GET /api/logs/dates
-getLogContent(serviceId, type, filename, offset?, limit?)  // GET /api/logs/content
-getContainerLogs(serviceId, tail?)     // GET /api/deploy/logs/:id (保持)
+getLogFiles(serviceId, type, date)                    // GET /api/logs/list
+getLogDates(serviceId, type)                          // GET /api/logs/dates
+getLogContent(serviceId, type, date, filename, offset?, limit?)  // GET /api/logs/content
+getContainerLogs(serviceId, tail?)                    // GET /api/deploy/logs/:id (保持)
 ```
 
 ### Step 4.3: api/projects.ts 无需改动
@@ -265,14 +285,15 @@ Ant Design Drawer（70% 宽度），包含：
 
 1. **WebSocket 认证**: 前端需在 WebSocket URL 中传递 token（`?token=xxx`），后端需在握手时验证
 2. **路径遍历防护**: 使用 `Path.resolve().normalize()` + 前缀校验，不能仅靠字符串检查 `..`
-3. **部署日志追加模式**: 从覆写改为 APPEND，需正确实现文件大小拆分逻辑
-4. **ContainerLogs 路由删除**: 已有书签会失效，建议添加路由重定向
-5. **appLogPath 仅在下次部署生效**: 已运行服务需重新部署才生效
+3. **日期目录创建**: 日志写入前必须 `mkdirs()` 创建日期目录，读取时若目录不存在应返回空列表
+4. **部署日志追加模式**: 从覆写改为 APPEND，需正确实现文件大小拆分逻辑
+5. **ContainerLogs 路由删除**: 已有书签会失效，建议添加路由重定向
+6. **appLogPath 仅在下次部署生效**: 已运行服务需重新部署才生效
 
 ## 验证方式
 
 1. 后端编译通过：`mvn compile`
 2. 前端编译通过：`npm run build`
-3. 手动测试：部署一个服务 → 验证日志写入新路径 → 在 DeployLogs 页面按项目/服务/日期筛选查看
+3. 手动测试：部署一个服务 → 验证日志写入新路径 `/data/flowops/logs/{projectId}/{serviceId}/deploy/{date}/HH-mm-ss.log` → 在 DeployLogs 页面按项目/服务/日期筛选查看
 4. 权限测试：无 VIEW 权限的用户访问日志 API 应返回 403
 5. 安全测试：尝试路径遍历 filename（如 `../../etc/passwd`）应被拒绝

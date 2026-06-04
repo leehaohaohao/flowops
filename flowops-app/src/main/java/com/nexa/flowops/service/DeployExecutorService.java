@@ -1,14 +1,14 @@
 package com.nexa.flowops.service;
 
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
-import com.nexa.flowops.entity.PortMapping;
 import com.nexa.flowops.mapper.DeployRecordMapper;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.service.generate.ConfigGeneratorChain;
+import com.nexa.flowops.service.generate.DeployContext;
 import com.nexa.flowops.util.DockerUtil;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,10 +20,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.zip.ZipInputStream;
-import java.util.Collections;
-import java.util.List;
 
 @Service
 public class DeployExecutorService {
@@ -34,16 +31,19 @@ public class DeployExecutorService {
     private final DeployRecordMapper recordMapper;
     private final DockerUtil dockerUtil;
     private final ObjectMapper objectMapper;
+    private final ConfigGeneratorChain configGeneratorChain;
     private final String storagePath = "/data/flowops/services";
 
     public DeployExecutorService(DeployServiceMapper serviceMapper,
                                   DeployRecordMapper recordMapper,
                                   DockerUtil dockerUtil,
-                                  ObjectMapper objectMapper) {
+                                  ObjectMapper objectMapper,
+                                  ConfigGeneratorChain configGeneratorChain) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.dockerUtil = dockerUtil;
         this.objectMapper = objectMapper;
+        this.configGeneratorChain = configGeneratorChain;
     }
 
     // ==================== 上传辅助 ====================
@@ -140,7 +140,6 @@ public class DeployExecutorService {
 
     // ==================== 部署 ====================
 
-    @SuppressWarnings("unchecked")
     public Result<Void> deploy(Long serviceId) {
         DeployService service = serviceMapper.selectById(serviceId);
         DeployRecord record = new DeployRecord();
@@ -150,49 +149,11 @@ public class DeployExecutorService {
         String logPath = storagePath + "/logs/" + service.getName() + "-" + System.currentTimeMillis() + ".log";
 
         try {
-            // 解析 serviceConfig
-            Map<String, Object> config = parseServiceConfig(service.getServiceConfig());
-            Map<String, Object> backendConfig = config.containsKey("backend")
-                    ? (Map<String, Object>) config.get("backend") : null;
-            Map<String, Object> frontendConfig = config.containsKey("frontend")
-                    ? (Map<String, Object>) config.get("frontend") : null;
-            String serviceType = service.getServiceType();
-
-            // 解析 portMappings（优先使用新字段，为空时 fallback 到旧字段）
-            List<PortMapping> portMappings = parsePortMappings(service.getPortMappings());
+            // 构建上下文并生成配置文件
+            DeployContext context = DeployContext.from(service, objectMapper);
+            configGeneratorChain.generate(context);
 
             String volumeDir = service.getVolumeDir();
-
-            // 根据服务类型生成部署文件
-            if ("backend".equals(serviceType) || "fullstack".equals(serviceType)) {
-                generateDockerfile(volumeDir, backendConfig, portMappings, serviceType);
-            }
-            if ("frontend".equals(serviceType) || "fullstack".equals(serviceType)) {
-                String proxyTarget;
-                if ("fullstack".equals(serviceType)) {
-                    // 优先从 portMappings 获取 backend expose 端口
-                    int containerPort = getInt(backendConfig, "containerPort", 8080);
-                    if (!portMappings.isEmpty()) {
-                        List<PortMapping> backendMappings = getMappingsByTarget(portMappings, "backend");
-                        for (PortMapping pm : backendMappings) {
-                            if (pm.isExpose()) {
-                                containerPort = pm.getContainerPort();
-                                break;
-                            }
-                        }
-                    }
-                    proxyTarget = "http://backend:" + containerPort;
-                } else {
-                    proxyTarget = frontendConfig != null && frontendConfig.containsKey("backendUrl")
-                            ? (String) frontendConfig.get("backendUrl") : "http://localhost:8080";
-                }
-                List<Map<String, Object>> proxyRules = (frontendConfig != null && frontendConfig.containsKey("proxyRules"))
-                        ? (List<Map<String, Object>>) frontendConfig.get("proxyRules") : Collections.emptyList();
-                String customNginx = frontendConfig != null ? (String) frontendConfig.get("customNginxConfig") : null;
-                int nginxListenPort = frontendConfig != null ? getInt(frontendConfig, "nginxListenPort", 80) : 80;
-                generateNginxConf(volumeDir, proxyTarget, proxyRules, customNginx, nginxListenPort);
-            }
-            generateComposeYml(volumeDir, service, serviceType, backendConfig, frontendConfig, portMappings);
 
             // 执行 docker compose
             String composePath = volumeDir + "/docker-compose.yml";
@@ -267,376 +228,6 @@ public class DeployExecutorService {
             recordMapper.insert(record);
             return Result.fail("部署异常: " + e.getMessage());
         }
-    }
-
-    // ==================== 文件生成 ====================
-
-    private void generateDockerfile(String volumeDir, Map<String, Object> backendConfig,
-                                     List<PortMapping> portMappings, String serviceType) throws IOException {
-        String runtime = getString(backendConfig, "runtime", "java");
-
-        // 根据 runtime 设置不同的默认值
-        String defaultBaseImage;
-        String defaultStartupCommand;
-        if ("go".equals(runtime)) {
-            defaultBaseImage = "golang:1.26.3-alpine";
-            defaultStartupCommand = "/app/app";
-        } else {
-            defaultBaseImage = "openjdk:17-jdk-slim";
-            defaultStartupCommand = "java -jar /app/app.jar";
-        }
-
-        String baseImage = getString(backendConfig, "baseImage", defaultBaseImage);
-        int containerPort = getInt(backendConfig, "containerPort", 8080);
-        String startupCommand = getString(backendConfig, "startupCommand", defaultStartupCommand);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("FROM ").append(baseImage).append("\n");
-        sb.append("WORKDIR /app\n");
-
-        // 根据 runtime 生成不同的 COPY 指令
-        if ("go".equals(runtime)) {
-            sb.append("COPY app /app/app\n");
-            sb.append("RUN chmod +x /app/app\n");
-        } else {
-            sb.append("COPY app.jar /app/app.jar\n");
-        }
-
-        // EXPOSE: 优先从 portMappings 收集所有 containerPort
-        if (!portMappings.isEmpty()) {
-            Set<Integer> exposePorts = new LinkedHashSet<>();
-            for (PortMapping pm : portMappings) {
-                // backend 模式收集全部；fullstack 只收集 backend target
-                if ("fullstack".equals(serviceType) && !"backend".equals(pm.getTarget())) {
-                    continue;
-                }
-                exposePorts.add(pm.getContainerPort());
-            }
-            sb.append("EXPOSE ").append(
-                    exposePorts.stream().map(String::valueOf).collect(Collectors.joining(" "))
-            ).append("\n");
-        } else {
-            sb.append("EXPOSE ").append(containerPort).append("\n");
-        }
-
-        // 添加环境变量 ENV 指令
-        if (backendConfig != null && backendConfig.containsKey("envVars")) {
-            Map<String, String> envVars = (Map<String, String>) backendConfig.get("envVars");
-            if (envVars != null) {
-                for (Map.Entry<String, String> entry : envVars.entrySet()) {
-                    sb.append("ENV ").append(entry.getKey()).append("=").append(entry.getValue()).append("\n");
-                }
-            }
-        }
-
-        // ENTRYPOINT 拆分为 JSON 数组格式（支持引号参数）
-        List<String> cmdParts = splitCommand(startupCommand);
-        sb.append("ENTRYPOINT [");
-        for (int i = 0; i < cmdParts.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append("\"").append(cmdParts.get(i).replace("\"", "\\\"")).append("\"");
-        }
-        sb.append("]\n");
-
-        Files.writeString(new File(volumeDir, "Dockerfile").toPath(), sb.toString());
-        log.info("已生成 Dockerfile");
-    }
-
-    @SuppressWarnings("unchecked")
-    private void generateNginxConf(String volumeDir, String proxyTarget, List<Map<String, Object>> proxyRules, String customNginx, int nginxListenPort) throws IOException {
-        String content;
-        if (customNginx != null && !customNginx.isEmpty()) {
-            content = customNginx;
-        } else {
-            StringBuilder sb = new StringBuilder();
-            sb.append("server {\n");
-            sb.append("    listen ").append(nginxListenPort).append(";\n");
-            sb.append("    server_name localhost;\n");
-            sb.append("\n");
-            sb.append("    root /usr/share/nginx/html;\n");
-            sb.append("    index index.html;\n");
-            sb.append("\n");
-            sb.append("    # 静态资源缓存\n");
-            sb.append("    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {\n");
-            sb.append("        expires 30d;\n");
-            sb.append("        add_header Cache-Control \"public, immutable\";\n");
-            sb.append("    }\n");
-
-            // 遍历代理规则列表，逐条生成 location 块
-            if (proxyRules != null) {
-                for (Map<String, Object> rule : proxyRules) {
-                    String path = getString(rule, "path", "");
-                    if (path.isEmpty()) continue;
-                    if (!path.startsWith("/")) path = "/" + path;
-                    if (!path.endsWith("/")) path = path + "/";
-
-                    sb.append("\n");
-                    sb.append("    # 反向代理: ").append(path).append("\n");
-                    sb.append("    location ").append(path).append(" {\n");
-
-                    // 遍历该规则下的所有指令
-                    List<Map<String, String>> directives = (List<Map<String, String>>) rule.get("directives");
-                    if (directives != null) {
-                        for (Map<String, String> d : directives) {
-                            String name = d.get("name");
-                            String value = d.get("value");
-                            if (name != null && !name.isEmpty()) {
-                                sb.append("        ").append(name);
-                                if (value != null && !value.isEmpty()) {
-                                    sb.append(" ").append(value);
-                                }
-                                sb.append(";\n");
-                            }
-                        }
-                    }
-
-                    sb.append("    }\n");
-                }
-            }
-
-            sb.append("\n");
-            sb.append("    # SPA 路由\n");
-            sb.append("    location / {\n");
-            sb.append("        try_files $uri $uri/ /index.html;\n");
-            sb.append("    }\n");
-            sb.append("}\n");
-            content = sb.toString();
-        }
-        Files.writeString(new File(volumeDir, "default.conf").toPath(), content);
-        log.info("已生成 default.conf");
-    }
-
-    @SuppressWarnings("unchecked")
-    private void generateComposeYml(String volumeDir, DeployService service, String serviceType,
-                                     Map<String, Object> backendConfig,
-                                     Map<String, Object> frontendConfig,
-                                     List<PortMapping> portMappings) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        sb.append("services:\n");
-
-        if (!portMappings.isEmpty()) {
-            // ===== 新逻辑：从 portMappings 生成 =====
-            if ("backend".equals(serviceType)) {
-                generateBackendComposeFromMappings(sb, portMappings, backendConfig);
-            } else if ("frontend".equals(serviceType)) {
-                generateFrontendComposeFromMappings(sb, portMappings, frontendConfig);
-            } else if ("fullstack".equals(serviceType)) {
-                List<PortMapping> backendMappings = getMappingsByTarget(portMappings, "backend");
-                List<PortMapping> frontendMappings = getMappingsByTarget(portMappings, "frontend");
-                // backend target 默认
-                if (backendMappings.isEmpty()) {
-                    backendMappings = getMappingsByTarget(portMappings, null);
-                }
-                generateFullstackBackendComposeFromMappings(sb, backendMappings, backendConfig);
-                generateFullstackFrontendComposeFromMappings(sb, frontendMappings, frontendConfig);
-            }
-        } else {
-            // ===== 旧逻辑 fallback（portMappings 为空时，从 serviceConfig 读取）=====
-            if ("backend".equals(serviceType)) {
-                int containerPort = getInt(backendConfig, "containerPort", 8080);
-                sb.append("  backend:\n");
-                sb.append("    build: .\n");
-                sb.append("    ports:\n");
-                sb.append("      - \"").append(containerPort).append(":").append(containerPort).append("\"\n");
-                appendVolumes(sb, backendConfig);
-                appendEnvironment(sb, backendConfig);
-                sb.append("    restart: unless-stopped\n");
-            } else if ("frontend".equals(serviceType)) {
-                int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
-                sb.append("  frontend:\n");
-                sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-                sb.append("    ports:\n");
-                sb.append("      - \"").append(nginxContainerPort).append(":").append(nginxContainerPort).append("\"\n");
-                sb.append("    volumes:\n");
-                sb.append("      - ./dist:/usr/share/nginx/html\n");
-                sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-                sb.append("    restart: unless-stopped\n");
-            } else if ("fullstack".equals(serviceType)) {
-                int containerPort = getInt(backendConfig, "containerPort", 8080);
-
-                sb.append("  backend:\n");
-                sb.append("    build: .\n");
-                sb.append("    expose:\n");
-                sb.append("      - \"").append(containerPort).append("\"\n");
-                appendVolumes(sb, backendConfig);
-                appendEnvironment(sb, backendConfig);
-                sb.append("    restart: unless-stopped\n");
-
-                int nginxContainerPort = getInt(frontendConfig, "containerPort", 80);
-                int frontendHostPort = getInt(frontendConfig, "frontendPort", 80);
-
-                sb.append("  frontend:\n");
-                sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-                sb.append("    ports:\n");
-                sb.append("      - \"").append(frontendHostPort).append(":").append(nginxContainerPort).append("\"\n");
-                sb.append("    volumes:\n");
-                sb.append("      - ./dist:/usr/share/nginx/html\n");
-                sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-                sb.append("    depends_on:\n");
-                sb.append("      - backend\n");
-                sb.append("    restart: unless-stopped\n");
-            }
-        }
-
-        Files.writeString(new File(volumeDir, "docker-compose.yml").toPath(), sb.toString());
-        log.info("[{}] 已生成 docker-compose.yml (type={})", service.getName(), serviceType);
-    }
-
-    // ===== portMappings 生成辅助方法 =====
-
-    private void generateBackendComposeFromMappings(StringBuilder sb, List<PortMapping> portMappings,
-                                                     Map<String, Object> backendConfig) {
-        List<PortMapping> exposeMappings = getExposeMappings(portMappings);
-        List<PortMapping> hostMappings = getHostPortMappings(portMappings);
-
-        sb.append("  backend:\n");
-        sb.append("    build: .\n");
-
-        if (!exposeMappings.isEmpty()) {
-            sb.append("    expose:\n");
-            for (PortMapping pm : exposeMappings) {
-                sb.append("      - \"").append(pm.getContainerPort()).append("\"\n");
-            }
-        }
-        if (!hostMappings.isEmpty()) {
-            sb.append("    ports:\n");
-            for (PortMapping pm : hostMappings) {
-                sb.append("      - \"").append(pm.getHostPort()).append(":").append(pm.getContainerPort()).append("\"\n");
-            }
-        }
-
-        appendVolumes(sb, backendConfig);
-        appendEnvironment(sb, backendConfig);
-        sb.append("    restart: unless-stopped\n");
-    }
-
-    private void generateFrontendComposeFromMappings(StringBuilder sb, List<PortMapping> portMappings,
-                                                      Map<String, Object> frontendConfig) {
-        PortMapping primary = getPrimaryMapping(portMappings);
-        if (primary == null) primary = portMappings.get(0);
-
-        sb.append("  frontend:\n");
-        sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-        sb.append("    ports:\n");
-        sb.append("      - \"").append(primary.getHostPort()).append(":").append(primary.getContainerPort()).append("\"\n");
-        sb.append("    volumes:\n");
-        sb.append("      - ./dist:/usr/share/nginx/html\n");
-        sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-        sb.append("    restart: unless-stopped\n");
-    }
-
-    private void generateFullstackBackendComposeFromMappings(StringBuilder sb, List<PortMapping> backendMappings,
-                                                              Map<String, Object> backendConfig) {
-        List<PortMapping> exposeMappings = getExposeMappings(backendMappings);
-        List<PortMapping> hostMappings = getHostPortMappings(backendMappings);
-
-        sb.append("  backend:\n");
-        sb.append("    build: .\n");
-
-        if (!exposeMappings.isEmpty()) {
-            sb.append("    expose:\n");
-            for (PortMapping pm : exposeMappings) {
-                sb.append("      - \"").append(pm.getContainerPort()).append("\"\n");
-            }
-        }
-        if (!hostMappings.isEmpty()) {
-            sb.append("    ports:\n");
-            for (PortMapping pm : hostMappings) {
-                sb.append("      - \"").append(pm.getHostPort()).append(":").append(pm.getContainerPort()).append("\"\n");
-            }
-        }
-
-        appendVolumes(sb, backendConfig);
-        appendEnvironment(sb, backendConfig);
-        sb.append("    restart: unless-stopped\n");
-    }
-
-    private void generateFullstackFrontendComposeFromMappings(StringBuilder sb, List<PortMapping> frontendMappings,
-                                                               Map<String, Object> frontendConfig) {
-        PortMapping primary = frontendMappings.isEmpty() ? null : getPrimaryMapping(frontendMappings);
-        if (primary == null) primary = frontendMappings.isEmpty() ? null : frontendMappings.get(0);
-        if (primary == null) return;
-
-        sb.append("  frontend:\n");
-        sb.append("    image: ").append(getString(frontendConfig, "baseImage", "nginx:alpine")).append("\n");
-        sb.append("    ports:\n");
-        sb.append("      - \"").append(primary.getHostPort()).append(":").append(primary.getContainerPort()).append("\"\n");
-        sb.append("    volumes:\n");
-        sb.append("      - ./dist:/usr/share/nginx/html\n");
-        sb.append("      - ./default.conf:/etc/nginx/conf.d/default.conf\n");
-        sb.append("    depends_on:\n");
-        sb.append("      - backend\n");
-        sb.append("    restart: unless-stopped\n");
-    }
-
-    // ===== portMappings 工具方法 =====
-
-    private List<PortMapping> parsePortMappings(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("解析 portMappings 失败: {}", e.getMessage());
-            return List.of();
-        }
-    }
-
-    private PortMapping getPrimaryMapping(List<PortMapping> mappings) {
-        for (PortMapping pm : mappings) {
-            if (pm.isPrimary()) return pm;
-        }
-        return null;
-    }
-
-    private List<PortMapping> getMappingsByTarget(List<PortMapping> mappings, String target) {
-        List<PortMapping> result = new ArrayList<>();
-        for (PortMapping pm : mappings) {
-            String pmTarget = pm.getTarget() != null ? pm.getTarget() : "backend";
-            if (pmTarget.equals(target != null ? target : "backend")) {
-                result.add(pm);
-            }
-        }
-        return result;
-    }
-
-    private List<PortMapping> getExposeMappings(List<PortMapping> mappings) {
-        List<PortMapping> result = new ArrayList<>();
-        for (PortMapping pm : mappings) {
-            if (pm.isExpose()) result.add(pm);
-        }
-        return result;
-    }
-
-    private List<PortMapping> getHostPortMappings(List<PortMapping> mappings) {
-        List<PortMapping> result = new ArrayList<>();
-        for (PortMapping pm : mappings) {
-            if (!pm.isExpose() && pm.getHostPort() != null) result.add(pm);
-        }
-        return result;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void appendEnvironment(StringBuilder sb, Map<String, Object> config) {
-        if (config == null || !config.containsKey("envVars")) return;
-        Map<String, String> envVars = (Map<String, String>) config.get("envVars");
-        if (envVars == null || envVars.isEmpty()) return;
-        sb.append("    environment:\n");
-        for (Map.Entry<String, String> entry : envVars.entrySet()) {
-            sb.append("      - ").append(entry.getKey()).append("=").append(entry.getValue()).append("\n");
-        }
-    }
-
-    // 添加 volume 挂载（数据持久化）
-    @SuppressWarnings("unchecked")
-    private void appendVolumes(StringBuilder sb, Map<String, Object> config) {
-        if (config == null || !config.containsKey("dataMount")) return;
-        Map<String, Object> dataMount = (Map<String, Object>) config.get("dataMount");
-        if (dataMount == null) return;
-        String containerPath = getString(dataMount, "containerPath", "");
-        if (containerPath.isEmpty()) return;
-        String hostDir = getString(dataMount, "hostDir", "./data");
-        sb.append("    volumes:\n");
-        sb.append("      - ").append(hostDir).append(":").append(containerPath).append("\n");
     }
 
     // ==================== 容器操作 ====================
@@ -727,13 +318,8 @@ public class DeployExecutorService {
 
     // ==================== 部署健康检查 ====================
 
-    /**
-     * 轮询容器状态，等待所有容器进入稳定运行状态
-     * @return true 表示所有容器正常运行，false 表示有容器异常（重启中或已退出）
-     */
     private boolean waitForContainers(String volumeDir, int timeoutSeconds) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
-        // 给容器几秒初始启动时间
         Thread.sleep(3000);
 
         while (System.currentTimeMillis() < deadline) {
@@ -750,7 +336,6 @@ public class DeployExecutorService {
                 continue;
             }
 
-            // 解析每行 JSON（每个容器一行）
             String[] lines = output.trim().split("\n");
             boolean allRunning = true;
             boolean anyRestarting = false;
@@ -761,9 +346,8 @@ public class DeployExecutorService {
                 try {
                     Map<String, Object> info = objectMapper.readValue(line, Map.class);
                     String state = String.valueOf(info.getOrDefault("State", "")).toLowerCase();
-                    // RestartCount 不一定在所有版本都有，优先看 State
                     if (state.contains("exited") || state.contains("dead")) {
-                        return false; // 容器已退出，直接判定失败
+                        return false;
                     }
                     if (state.contains("restarting")) {
                         anyRestarting = true;
@@ -773,7 +357,6 @@ public class DeployExecutorService {
                         allRunning = false;
                     }
                 } catch (Exception ignored) {
-                    // JSON 解析失败，跳过
                 }
             }
 
@@ -781,9 +364,7 @@ public class DeployExecutorService {
                 return true;
             }
             if (anyRestarting) {
-                // 有容器在重启，再等几秒看能否稳定
                 Thread.sleep(3000);
-                // 再检查一次
                 ProcessBuilder pb2 = dockerUtil.newProcessBuilder(
                         "docker", "compose", "ps", "--format", "json"
                 );
@@ -791,7 +372,6 @@ public class DeployExecutorService {
                 Process proc2 = pb2.start();
                 String output2 = readProcessOutput(proc2);
                 proc2.waitFor();
-                // 如果仍然在重启，判定失败
                 if (output2.toLowerCase().contains("restarting")) {
                     return false;
                 }
@@ -802,9 +382,6 @@ public class DeployExecutorService {
         return false;
     }
 
-    /**
-     * 获取所有容器的最近日志，用于排查启动失败原因
-     */
     private String getContainerLogs(String volumeDir) {
         try {
             ProcessBuilder pb = dockerUtil.newProcessBuilder(
@@ -820,9 +397,6 @@ public class DeployExecutorService {
         }
     }
 
-    /**
-     * 获取指定服务的容器运行日志（REST API 用）
-     */
     public String getContainerLogs(Long serviceId, int tail) {
         DeployService service = serviceMapper.selectById(serviceId);
         if (service == null) {
@@ -853,74 +427,5 @@ public class DeployExecutorService {
             }
         }
         return sb.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseServiceConfig(String json) {
-        if (json == null || json.isEmpty()) return new HashMap<>();
-        try {
-            return objectMapper.readValue(json, Map.class);
-        } catch (Exception e) {
-            log.warn("解析 serviceConfig 失败: {}", e.getMessage());
-            return new HashMap<>();
-        }
-    }
-
-    private String getString(Map<String, Object> map, String key, String defaultValue) {
-        if (map == null || !map.containsKey(key)) return defaultValue;
-        Object val = map.get(key);
-        return val != null ? val.toString() : defaultValue;
-    }
-
-    private int getInt(Map<String, Object> map, String key, int defaultValue) {
-        if (map == null || !map.containsKey(key)) return defaultValue;
-        Object val = map.get(key);
-        if (val instanceof Number) return ((Number) val).intValue();
-        try { return Integer.parseInt(val.toString()); } catch (Exception e) { return defaultValue; }
-    }
-
-    /**
-     * Shell 风格命令拆分，支持单引号和双引号包裹的参数
-     * 例: java -jar app.jar --spring.profiles.active="prod dev" -> [java, -jar, app.jar, --spring.profiles.active=prod dev]
-     */
-    static List<String> splitCommand(String command) {
-        List<String> parts = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-
-        for (int i = 0; i < command.length(); i++) {
-            char c = command.charAt(i);
-            if (inSingleQuote) {
-                if (c == '\'') {
-                    inSingleQuote = false;
-                } else {
-                    current.append(c);
-                }
-            } else if (inDoubleQuote) {
-                if (c == '"') {
-                    inDoubleQuote = false;
-                } else {
-                    current.append(c);
-                }
-            } else {
-                if (c == '\'') {
-                    inSingleQuote = true;
-                } else if (c == '"') {
-                    inDoubleQuote = true;
-                } else if (Character.isWhitespace(c)) {
-                    if (current.length() > 0) {
-                        parts.add(current.toString());
-                        current.setLength(0);
-                    }
-                } else {
-                    current.append(c);
-                }
-            }
-        }
-        if (current.length() > 0) {
-            parts.add(current.toString());
-        }
-        return parts;
     }
 }

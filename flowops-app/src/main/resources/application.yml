@@ -46,3 +46,7 @@ docker:
 app:
   storage:
     path: /data/flowops/services
+  logs:
+    path: /data/flowops/logs
+    max-file-size: 104857600    # 100MB
+

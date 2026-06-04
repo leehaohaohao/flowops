@@ -1,4 +1,4 @@
-package com.nexa.flowops.common;
+package com.nexa.flowops.common.util;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 

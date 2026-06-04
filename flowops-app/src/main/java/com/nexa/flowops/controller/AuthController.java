@@ -1,7 +1,7 @@
 package com.nexa.flowops.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.UserInfoVO;
 import com.nexa.flowops.dto.LoginRequest;
 import com.nexa.flowops.permission.entity.SysUser;

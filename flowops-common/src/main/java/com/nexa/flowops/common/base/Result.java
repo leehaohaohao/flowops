@@ -1,4 +1,4 @@
-package com.nexa.flowops.common;
+package com.nexa.flowops.common.base;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

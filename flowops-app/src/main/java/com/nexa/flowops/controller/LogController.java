@@ -1,6 +1,6 @@
 package com.nexa.flowops.controller;
 
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.service.LogService;
 import org.springframework.web.bind.annotation.*;
 

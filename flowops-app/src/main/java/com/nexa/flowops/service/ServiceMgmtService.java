@@ -1,7 +1,7 @@
 package com.nexa.flowops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.base.BusinessException;
 import com.nexa.flowops.dto.CreateServiceRequest;
 import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;

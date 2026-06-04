@@ -3,8 +3,8 @@ package com.nexa.flowops.config;
 import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
-import com.nexa.flowops.common.BusinessException;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.BusinessException;
+import com.nexa.flowops.common.base.Result;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 

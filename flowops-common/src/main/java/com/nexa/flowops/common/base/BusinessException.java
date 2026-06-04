@@ -1,4 +1,4 @@
-package com.nexa.flowops.common;
+package com.nexa.flowops.common.base;
 
 /**
  * 业务异常，用于业务校验失败等可控场景

@@ -1,0 +1,99 @@
+<h2>日志页面设计方案</h2>
+<p class="subtitle">日志查看页面的布局和交互方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>左侧树形导航 + 右侧日志内容</h3>
+      <p>左侧按 项目 → 服务 → 日志类型（部署日志/运行日志/应用日志）展开树形结构，右侧显示日志内容。支持实时跟踪和历史查看切换。</p>
+      <div class="mockup">
+        <div class="mockup-header">日志查看 — 树形导航</div>
+        <div class="mockup-body">
+          <div style="display:flex;gap:0;height:300px;">
+            <div style="width:220px;background:#fafafa;border-right:1px solid #e8e8e8;padding:8px;font-size:12px;overflow:auto;">
+              <div style="padding:4px;font-weight:600;color:#333;margin-bottom:4px;">📂 日志导航</div>
+              <div style="padding:2px 4px 2px 8px;cursor:pointer;">▼ 电商平台</div>
+              <div style="padding:2px 4px 2px 20px;cursor:pointer;">▼ user-service</div>
+              <div style="padding:2px 4px 2px 32px;background:#e6f4ff;border-radius:3px;color:#1677ff;cursor:pointer;">📋 部署日志</div>
+              <div style="padding:2px 4px 2px 32px;color:#666;cursor:pointer;">▶ 实时跟踪</div>
+              <div style="padding:2px 4px 2px 32px;color:#666;cursor:pointer;">📄 应用日志</div>
+              <div style="padding:2px 4px 2px 20px;cursor:pointer;">▶ order-service</div>
+              <div style="padding:2px 4px 2px 20px;cursor:pointer;">▶ gateway</div>
+              <div style="padding:2px 4px 2px 8px;cursor:pointer;">▶ 数据平台</div>
+              <div style="margin-top:8px;padding:8px;background:#f0f0f0;border-radius:4px;">
+                <div style="font-size:11px;color:#999;margin-bottom:4px;">📅 日期筛选</div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                  <span style="padding:2px 6px;background:#1677ff;color:#fff;border-radius:3px;font-size:11px;">今天</span>
+                  <span style="padding:2px 6px;background:#fff;border:1px solid #d9d9d9;border-radius:3px;font-size:11px;">昨天</span>
+                  <span style="padding:2px 6px;background:#fff;border:1px solid #d9d9d9;border-radius:3px;font-size:11px;">近7天</span>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;">
+              <div style="padding:8px 12px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+                <span><strong>电商平台 / user-service / 部署日志</strong> — 2026-06-02</span>
+                <div style="display:flex;gap:6px;">
+                  <button style="padding:3px 8px;background:#1677ff;color:#fff;border:none;border-radius:3px;font-size:11px;">实时跟踪</button>
+                  <button style="padding:3px 8px;background:#f0f0f0;border:1px solid #d9d9d9;border-radius:3px;font-size:11px;">下载</button>
+                </div>
+              </div>
+              <div style="flex:1;background:#1e1e1e;color:#d4d4d4;padding:12px;font-family:monospace;font-size:11px;overflow:auto;line-height:1.6;">
+                <div>[10:23:15] Building image user-service:latest...</div>
+                <div>[10:23:18] Step 1/8 : FROM openjdk:17-slim</div>
+                <div>[10:23:19] Step 2/8 : COPY target/app.jar /app.jar</div>
+                <div>[10:23:20] Successfully built a3b2c1d</div>
+                <div style="color:#52c41a;">[10:23:22] Container user-service started ✓</div>
+                <div>[10:23:25] Health check passed</div>
+                <div style="color:#999;">[10:23:26] ===== 服务运行日志 =====</div>
+                <div>[10:23:27] Started UserServiceApplication in 3.2s</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>顶部筛选栏 + 日志列表 + 内容区</h3>
+      <p>顶部用下拉框选择项目和服务，Tab 切换日志类型。日志文件列表和内容左右分栏。简洁直接，不需要展开树。</p>
+      <div class="mockup">
+        <div class="mockup-header">日志查看 — 筛选栏</div>
+        <div class="mockup-body">
+          <div style="display:flex;gap:8px;margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:12px;align-items:center;flex-wrap:wrap;">
+            <span>项目:</span>
+            <select style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px;"><option>电商平台</option></select>
+            <span>服务:</span>
+            <select style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px;"><option>user-service</option></select>
+            <span style="margin-left:8px;">类型:</span>
+            <div style="display:flex;gap:0;">
+              <span style="padding:3px 10px;background:#1677ff;color:#fff;border-radius:4px 0 0 4px;font-size:11px;">部署日志</span>
+              <span style="padding:3px 10px;background:#fff;border:1px solid #d9d9d9;border-left:none;font-size:11px;">实时跟踪</span>
+              <span style="padding:3px 10px;background:#fff;border:1px solid #d9d9d9;border-left:none;border-radius:0 4px 4px 0;font-size:11px;">应用日志</span>
+            </div>
+            <span style="margin-left:8px;">日期:</span>
+            <input type="date" value="2026-06-02" style="padding:3px 6px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px;">
+          </div>
+          <div style="display:flex;gap:0;height:260px;">
+            <div style="width:200px;border:1px solid #e8e8e8;border-radius:4px 0 0 4px;overflow:auto;font-size:11px;">
+              <div style="padding:6px 8px;background:#f0f0f0;font-weight:600;border-bottom:1px solid #e8e8e8;">日志文件</div>
+              <div style="padding:5px 8px;background:#e6f4ff;color:#1677ff;cursor:pointer;border-bottom:1px solid #f0f0f0;">deploy-2026-06-02.log</div>
+              <div style="padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;color:#666;">deploy-2026-06-02-2.log</div>
+              <div style="padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;color:#666;">deploy-2026-06-01.log</div>
+              <div style="padding:5px 8px;cursor:pointer;color:#666;">deploy-2026-05-31.log</div>
+            </div>
+            <div style="flex:1;background:#1e1e1e;color:#d4d4d4;padding:12px;font-family:monospace;font-size:11px;border-radius:0 4px 4px 0;overflow:auto;line-height:1.6;">
+              <div>[10:23:15] Building image user-service:latest...</div>
+              <div>[10:23:18] Step 1/8 : FROM openjdk:17-slim</div>
+              <div>[10:23:19] Step 2/8 : COPY target/app.jar /app.jar</div>
+              <div style="color:#52c41a;">[10:23:22] Container started ✓</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

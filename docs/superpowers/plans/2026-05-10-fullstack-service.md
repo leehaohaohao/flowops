@@ -209,7 +209,7 @@ This is the core task. The `deploy()` method must read `serviceType` and `servic
 ```java
 package com.nexa.flowops.service;
 
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployRecordMapper;

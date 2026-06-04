@@ -1,9 +1,9 @@
 package com.nexa.flowops.permission.config;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.nexa.flowops.common.RequireProjectSupervisor;
-import com.nexa.flowops.common.RequirePermission;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.anno.RequireProjectSupervisor;
+import com.nexa.flowops.common.anno.RequirePermission;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
@@ -19,7 +19,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.Map;
 
 @Aspect

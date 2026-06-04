@@ -1,7 +1,7 @@
 package com.nexa.flowops.controller;
 
-import com.nexa.flowops.common.RequirePermission;
-import com.nexa.flowops.common.Result;
+import com.nexa.flowops.common.anno.RequirePermission;
+import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.CreateServiceRequest;
 import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;
@@ -9,7 +9,7 @@ import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;
 import com.nexa.flowops.service.ServiceMgmtService;
-import com.nexa.flowops.common.BusinessException;
+import com.nexa.flowops.common.base.BusinessException;
 import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.web.bind.annotation.*;
 

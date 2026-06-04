@@ -2,9 +2,9 @@ package com.nexa.flowops.permission.config;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nexa.flowops.common.Result;
-import com.nexa.flowops.common.RequireProjectSupervisor;
-import com.nexa.flowops.common.RequirePermission;
+import com.nexa.flowops.common.base.Result;
+import com.nexa.flowops.common.anno.RequireProjectSupervisor;
+import com.nexa.flowops.common.anno.RequirePermission;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import com.nexa.flowops.permission.service.PermissionService;

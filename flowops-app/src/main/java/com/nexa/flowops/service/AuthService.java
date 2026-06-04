@@ -1,6 +1,6 @@
 package com.nexa.flowops.service;
 
-import com.nexa.flowops.common.PasswordUtil;
+import com.nexa.flowops.common.util.PasswordUtil;
 import com.nexa.flowops.permission.entity.SysUser;
 import com.nexa.flowops.permission.mapper.SysUserMapper;
 import org.springframework.stereotype.Service;
