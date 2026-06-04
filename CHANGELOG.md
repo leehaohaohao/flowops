@@ -1,5 +1,13 @@
 # Changelog
 
+本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)（SemVer）规范，格式为 `Major.Minor.Patch`。
+
+- **Major**：重大变更，由维护者主观决定
+- **Minor**：新增功能特性、新增模块、模块级重构
+- **Patch**：接口字段新增、小优化、Bug 修复、依赖升级
+
+---
+
 ## 2.4.0 (2026-06-04)
 
 ### 重构
