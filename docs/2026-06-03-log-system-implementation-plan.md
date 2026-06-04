@@ -143,44 +143,6 @@ record.setLogPath(logPath);  // 当前从未调用
 
 ---
 
-## Phase 3: 后端 - 项目列表优化（runningCount）
-
-### Step 3.1: ExternalDataProvider 增加方法
-
-**文件**: `flowops-permission/src/main/java/com/nexa/flowops/permission/ExternalDataProvider.java`
-
-```java
-default long countRunningByProjectId(Long projectId) { return 0; }
-```
-
-### Step 3.2: FlowOpsExternalDataProvider 实现
-
-**文件**: `flowops-app/src/main/java/com/nexa/flowops/resolver/FlowOpsExternalDataProvider.java`
-
-```java
-@Override
-public long countRunningByProjectId(Long projectId) {
-    return deployServiceMapper.selectCount(
-        new LambdaQueryWrapper<DeployService>()
-            .eq(DeployService::getProjectId, projectId)
-            .eq(DeployService::getStatus, "running"));
-}
-```
-
-### Step 3.3: ProjectService 增加 getRunningCount
-
-**文件**: `flowops-permission/src/main/java/com/nexa/flowops/permission/service/ProjectService.java`
-
-### Step 3.4: ProjectDetailVO 增加 runningCount 字段
-
-**文件**: `flowops-permission/src/main/java/com/nexa/flowops/permission/dto/ProjectDetailVO.java`
-
-### Step 3.5: ProjectController.list() 填充 runningCount
-
-**文件**: `flowops-permission/src/main/java/com/nexa/flowops/permission/controller/ProjectController.java`
-
----
-
 ## Phase 4: 前端 - 类型与 API 层
 
 ### Step 4.1: types/index.ts 增加类型
@@ -253,31 +215,6 @@ Ant Design Drawer（70% 宽度），包含：
 - 后端配置区增加"应用日志路径（容器内）"输入框
 - 存入 `serviceConfig.appLogPath`
 - 更新 `ServiceConfig` 接口和 `collectConfig()`/表单加载逻辑
-
----
-
-## Phase 7: 前端 - ProjectList 卡片布局 + 清理
-
-### Step 7.1: 重写 ProjectList.tsx
-
-**文件**: `flowops-front/src/pages/ProjectList.tsx`
-
-- 顶部"上次访问"快捷入口（localStorage 存储 lastVisitedProjectId）
-- 卡片网格布局（Row + Col，每行 3 个）
-- 每张卡片：项目名称、描述、统计（服务数/运行中/成员数）
-- 点击卡片跳转服务列表，同时记录 lastVisited
-- 右上角保留管理按钮
-
-### Step 7.2: 更新 App.tsx 路由
-
-**文件**: `flowops-front/src/App.tsx`
-
-- 删除 ContainerLogs 路由和 import
-- 可选：添加重定向 `/projects/:projectId/services/:id/logs` → `/logs`
-
-### Step 7.3: 删除 ContainerLogs.tsx
-
-**文件**: `flowops-front/src/pages/ContainerLogs.tsx` — 删除
 
 ---
 
