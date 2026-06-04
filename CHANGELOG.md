@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.0 (2026-06-04)
+
+### 重构
+
+- 配置文件生成从 `DeployExecutorService` 抽离为责任链模式（`service/generate/` 包）
+- 新增 `ConfigGenerator` 接口 + `ConfigGeneratorChain`，Spring 自动发现 + `@Order` 控制执行顺序
+- 新增 `DockerfileGenerator`、`NginxConfGenerator`、`ComposeYmlGenerator` 三个生成器
+- 新增 `DeployContext` 上下文类，统一持有解析后的配置数据
+- 新增 `YamlHelper` 静态工具类，提取 Map 安全读取、YAML 生成辅助、PortMapping 过滤等公共方法
+- `DeployExecutorService` 移除约 300 行配置生成和工具方法，仅保留部署编排职责
+- 删除旧 stub 文件：`ServiceConfigGenerate`、`ServiceConfigGenerateContext`、`ServiceConfig`、`DockerfileGenerate`
+
+---
+
 ## 2.3.0 (2026-05-31)
 
 ### 新功能
