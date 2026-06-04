@@ -12,5 +12,6 @@ public class ProjectDetailVO {
     private Integer isDefault;
     private Long memberCount;
     private Long serviceCount;
+    private Long runningCount;
     private LocalDateTime createTime;
 }

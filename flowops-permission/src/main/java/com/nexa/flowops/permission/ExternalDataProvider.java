@@ -14,4 +14,7 @@ public interface ExternalDataProvider {
 
     /** 统计项目下的服务数量 */
     long countServicesByProjectId(Long projectId);
+
+    /** 统计项目下运行中的服务数量 */
+    default long countRunningByProjectId(Long projectId) { return 0; }
 }

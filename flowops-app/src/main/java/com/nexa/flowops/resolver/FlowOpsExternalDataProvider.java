@@ -26,4 +26,12 @@ public class FlowOpsExternalDataProvider implements ExternalDataProvider {
         return deployServiceMapper.selectCount(
                 new LambdaQueryWrapper<DeployService>().eq(DeployService::getProjectId, projectId));
     }
+
+    @Override
+    public long countRunningByProjectId(Long projectId) {
+        return deployServiceMapper.selectCount(
+                new LambdaQueryWrapper<DeployService>()
+                        .eq(DeployService::getProjectId, projectId)
+                        .eq(DeployService::getStatus, "running"));
+    }
 }

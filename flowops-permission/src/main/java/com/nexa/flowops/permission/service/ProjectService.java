@@ -84,4 +84,8 @@ public class ProjectService {
     public long getServiceCount(Long projectId) {
         return externalDataProvider.countServicesByProjectId(projectId);
     }
+
+    public long getRunningCount(Long projectId) {
+        return externalDataProvider.countRunningByProjectId(projectId);
+    }
 }

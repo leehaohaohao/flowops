@@ -57,6 +57,7 @@ public class ProjectController {
             vo.setIsDefault(p.getIsDefault());
             vo.setMemberCount(projectService.getMemberCount(p.getId()));
             vo.setServiceCount(projectService.getServiceCount(p.getId()));
+            vo.setRunningCount(projectService.getRunningCount(p.getId()));
             vo.setCreateTime(p.getCreateTime());
             return vo;
         }).toList();
