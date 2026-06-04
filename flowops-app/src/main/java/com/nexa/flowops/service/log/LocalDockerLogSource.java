@@ -16,6 +16,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 本地 Docker 部署日志数据源实现
+ * 日志目录结构：{app.logs.path}/{projectId}/{serviceId}/{type}/{date}/
+ */
 @Component
 public class LocalDockerLogSource implements LogSource {
 
