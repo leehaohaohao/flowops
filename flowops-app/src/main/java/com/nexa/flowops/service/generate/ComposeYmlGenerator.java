@@ -1,8 +1,10 @@
 package com.nexa.flowops.service.generate;
 
+import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.entity.PortMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +22,9 @@ import static com.nexa.flowops.service.generate.YamlHelper.*;
 public class ComposeYmlGenerator implements ConfigGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(ComposeYmlGenerator.class);
+
+    @Value("${app.logs.path}")
+    private String logsBasePath;
 
     @Override
     public boolean supports(DeployContext context) {
@@ -46,9 +51,10 @@ public class ComposeYmlGenerator implements ConfigGenerator {
     private void generateFromMappings(StringBuilder sb, DeployContext context) {
         String serviceType = context.getServiceType();
         List<PortMapping> portMappings = context.getPortMappings();
+        DeployService service = context.getService();
 
         if ("backend".equals(serviceType)) {
-            appendBackendService(sb, portMappings, context.getBackendConfig());
+            appendBackendService(sb, portMappings, context.getBackendConfig(), service);
         } else if ("frontend".equals(serviceType)) {
             appendFrontendService(sb, portMappings, context.getFrontendConfig(), false);
         } else if ("fullstack".equals(serviceType)) {
@@ -57,13 +63,13 @@ public class ComposeYmlGenerator implements ConfigGenerator {
             if (backendMappings.isEmpty()) {
                 backendMappings = getMappingsByTarget(portMappings, null);
             }
-            appendBackendService(sb, backendMappings, context.getBackendConfig());
+            appendBackendService(sb, backendMappings, context.getBackendConfig(), service);
             appendFrontendService(sb, frontendMappings, context.getFrontendConfig(), true);
         }
     }
 
     private void appendBackendService(StringBuilder sb, List<PortMapping> portMappings,
-                                       Map<String, Object> backendConfig) {
+                                       Map<String, Object> backendConfig, DeployService service) {
         List<PortMapping> exposeMappings = getExposeMappings(portMappings);
         List<PortMapping> hostMappings = getHostPortMappings(portMappings);
 
@@ -84,6 +90,7 @@ public class ComposeYmlGenerator implements ConfigGenerator {
         }
 
         appendVolumes(sb, backendConfig);
+        appendAppLogVolume(sb, service, backendConfig);
         appendEnvironment(sb, backendConfig);
         sb.append("    restart: unless-stopped\n");
     }
@@ -116,6 +123,7 @@ public class ComposeYmlGenerator implements ConfigGenerator {
         String serviceType = context.getServiceType();
         Map<String, Object> backendConfig = context.getBackendConfig();
         Map<String, Object> frontendConfig = context.getFrontendConfig();
+        DeployService service = context.getService();
 
         if ("backend".equals(serviceType)) {
             int containerPort = getInt(backendConfig, "containerPort", 8080);
@@ -124,6 +132,7 @@ public class ComposeYmlGenerator implements ConfigGenerator {
             sb.append("    ports:\n");
             sb.append("      - \"").append(containerPort).append(":").append(containerPort).append("\"\n");
             appendVolumes(sb, backendConfig);
+            appendAppLogVolume(sb, service, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
         } else if ("frontend".equals(serviceType)) {
@@ -144,6 +153,7 @@ public class ComposeYmlGenerator implements ConfigGenerator {
             sb.append("    expose:\n");
             sb.append("      - \"").append(containerPort).append("\"\n");
             appendVolumes(sb, backendConfig);
+            appendAppLogVolume(sb, service, backendConfig);
             appendEnvironment(sb, backendConfig);
             sb.append("    restart: unless-stopped\n");
 
@@ -160,6 +170,27 @@ public class ComposeYmlGenerator implements ConfigGenerator {
             sb.append("    depends_on:\n");
             sb.append("      - backend\n");
             sb.append("    restart: unless-stopped\n");
+        }
+    }
+
+    /**
+     * 若 serviceConfig 中配置了 appLogPath（容器内应用日志路径），
+     * 为 backend 服务添加 volume 映射，将宿主机日志目录挂载到容器内
+     */
+    @SuppressWarnings("unchecked")
+    private void appendAppLogVolume(StringBuilder sb, DeployService service, Map<String, Object> backendConfig) {
+        if (backendConfig == null || !backendConfig.containsKey("appLogPath")) return;
+        String appLogPath = String.valueOf(backendConfig.get("appLogPath")).trim();
+        if (appLogPath.isEmpty()) return;
+
+        String hostLogDir = logsBasePath + "/" + service.getProjectId() + "/" + service.getId() + "/app";
+        // 检查 sb 末尾是否已有 volumes 块（由 appendVolumes 写入）
+        String tail = sb.substring(Math.max(0, sb.length() - 200));
+        if (tail.contains("    volumes:")) {
+            sb.append("      - ").append(hostLogDir).append(":").append(appLogPath).append("\n");
+        } else {
+            sb.append("    volumes:\n");
+            sb.append("      - ").append(hostLogDir).append(":").append(appLogPath).append("\n");
         }
     }
 }

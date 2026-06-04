@@ -1,5 +1,6 @@
 package com.nexa.flowops.service.log;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -38,4 +39,15 @@ public interface LogSource {
      * @return 日期列表（已排序，格式 yyyy-MM-dd）
      */
     List<String> listDates(Long serviceId, String type);
+
+    /**
+     * 解析日志文件的实际文件系统路径（用于 WebSocket 增量监看等场景）
+     *
+     * @param serviceId 服务 ID
+     * @param type      日志类型（deploy / app）
+     * @param date      日期目录名（yyyy-MM-dd）
+     * @param filename  文件名
+     * @return 文件系统路径
+     */
+    Path resolveLogPath(Long serviceId, String type, String date, String filename);
 }

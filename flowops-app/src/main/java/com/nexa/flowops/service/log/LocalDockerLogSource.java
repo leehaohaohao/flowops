@@ -111,6 +111,16 @@ public class LocalDockerLogSource implements LogSource {
         return dates;
     }
 
+    @Override
+    public Path resolveLogPath(Long serviceId, String type, String date, String filename) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        if (service == null) return null;
+        Path dir = buildLogDir(service, type).resolve(date);
+        Path filePath = dir.resolve(filename).normalize();
+        if (!filePath.startsWith(dir)) return null;
+        return filePath;
+    }
+
     private Path buildLogDir(DeployService service, String type) {
         return Path.of(logBasePath,
                 String.valueOf(service.getProjectId()),

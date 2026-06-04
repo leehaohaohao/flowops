@@ -1,8 +1,12 @@
 package com.nexa.flowops.ws;
 
+import cn.dev33.satoken.stp.StpUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexa.flowops.service.log.LogSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -11,41 +15,79 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 
 /**
- * 实时日志 WebSocket 推送
- * 客户端连接后发送文件名，服务端先发送已有内容，之后每 2 秒检查文件增量并推送
+ * 部署日志实时 WebSocket 推送
+ * 客户端连接时通过 URL query 参数传递 token 进行认证
+ * 客户端发送 JSON: {"serviceId":1, "type":"deploy", "filename":"14-30-22.log"}
+ * 服务端先发送已有内容，之后每 2 秒检查文件增量并推送
  */
+@Component
 public class LogWebSocketHandler extends TextWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(LogWebSocketHandler.class);
 
-    private final String logBasePath = "/data/flowops/services/logs";
+    private final LogSource logSource;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ThreadPoolTaskScheduler taskScheduler;
     private final ConcurrentHashMap<String, ScheduledFuture<?>> watchTasks = new ConcurrentHashMap<>();
 
-    public LogWebSocketHandler(ThreadPoolTaskScheduler taskScheduler) {
+    public LogWebSocketHandler(LogSource logSource, ThreadPoolTaskScheduler taskScheduler) {
+        this.logSource = logSource;
         this.taskScheduler = taskScheduler;
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
-        log.info("WebSocket 连接建立: {}", session.getId());
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 从 URL query 参数获取 token 进行认证
+        String query = session.getUri() != null ? session.getUri().getQuery() : null;
+        String token = null;
+        if (query != null) {
+            for (String param : query.split("&")) {
+                String[] kv = param.split("=", 2);
+                if (kv.length == 2 && "token".equals(kv[0])) {
+                    token = kv[1];
+                    break;
+                }
+            }
+        }
+        if (token == null || token.isEmpty()) {
+            session.close(new CloseStatus(4001, "缺少认证 token"));
+            return;
+        }
+        if (StpUtil.getLoginIdByToken(token) == null) {
+            session.close(new CloseStatus(4003, "认证失败"));
+            return;
+        }
+        log.info("日志 WebSocket 连接建立: {}", session.getId());
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        String filename = message.getPayload().trim();
-        if (filename.isEmpty()) return;
+        Map<String, Object> params = objectMapper.readValue(message.getPayload(), Map.class);
+        Number serviceIdNum = (Number) params.get("serviceId");
+        String type = (String) params.get("type");
+        String filename = (String) params.get("filename");
+        if (serviceIdNum == null || type == null || filename == null) return;
 
-        // 先停止旧的文件监看任务
+        Long serviceId = serviceIdNum.longValue();
+
+        // 路径遍历校验
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            session.sendMessage(new TextMessage("非法文件名"));
+            return;
+        }
+
         cancelWatch(session.getId());
 
-        Path filePath = Path.of(logBasePath, filename);
-        if (!Files.exists(filePath)) {
-            session.sendMessage(new TextMessage("日志文件不存在: " + filename));
+        String date = (String) params.getOrDefault("date", "");
+        Path filePath = logSource.resolveLogPath(serviceId, type, date, filename);
+        if (filePath == null || !Files.exists(filePath)) {
+            session.sendMessage(new TextMessage("日志文件不存在"));
             return;
         }
 
@@ -64,13 +106,11 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
                 }
                 long currentSize = Files.size(filePath);
                 if (currentSize > lastSize[0]) {
-                    // 文件有增长，读取新增部分
                     try (RandomAccessFile raf = new RandomAccessFile(filePath.toFile(), "r")) {
                         raf.seek(lastSize[0]);
                         byte[] bytes = new byte[(int) (currentSize - lastSize[0])];
                         raf.readFully(bytes);
-                        String newContent = new String(bytes);
-                        session.sendMessage(new TextMessage(newContent));
+                        session.sendMessage(new TextMessage(new String(bytes)));
                     }
                     lastSize[0] = currentSize;
                 }
@@ -84,13 +124,13 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        log.info("WebSocket 连接关闭: {}, 状态={}", session.getId(), status);
+        log.info("日志 WebSocket 连接关闭: {}, 状态={}", session.getId(), status);
         cancelWatch(session.getId());
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
-        log.warn("WebSocket 传输错误: {}", session.getId(), exception);
+        log.warn("日志 WebSocket 传输错误: {}", session.getId(), exception);
         cancelWatch(session.getId());
     }
 

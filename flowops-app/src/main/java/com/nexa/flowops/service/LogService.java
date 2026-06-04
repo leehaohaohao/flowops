@@ -1,40 +1,47 @@
 package com.nexa.flowops.service;
 
+import com.nexa.flowops.service.log.LogSource;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.stream.Stream;
+import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class LogService {
 
-    private final String logBasePath = "/data/flowops/services/logs";
+    private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
-    public LogService() {
-        // 确保日志目录存在
-        new File(logBasePath).mkdirs();
+    private final LogSource logSource;
+
+    public LogService(LogSource logSource) {
+        this.logSource = logSource;
     }
 
-    public String getLogContent(String filename, long offset, long limit) throws IOException {
-        Path filePath = new File(logBasePath, filename).toPath();
-        if (!Files.exists(filePath)) {
-            return "日志文件不存在";
-        }
-        try (Stream<String> lines = Files.lines(filePath)) {
-            return lines.skip(offset).limit(limit).reduce("", (a, b) -> a + "\n" + b);
+    public List<String> listLogFiles(Long serviceId, String type, String date) {
+        validateFilename(date);
+        return logSource.listFiles(serviceId, type, date);
+    }
+
+    public String getLogContent(Long serviceId, String type, String date, String filename,
+                                long offset, long limit) {
+        validateDate(date);
+        validateFilename(filename);
+        return logSource.readContent(serviceId, type, date, filename, offset, limit);
+    }
+
+    public List<String> listLogDates(Long serviceId, String type) {
+        return logSource.listDates(serviceId, type);
+    }
+
+    private void validateFilename(String filename) {
+        if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            throw new IllegalArgumentException("非法文件名");
         }
     }
 
-    public java.util.List<String> listLogs() {
-        File dir = new File(logBasePath);
-        File[] files = dir.listFiles((d, name) -> name.endsWith(".log"));
-        if (files == null) return java.util.Collections.emptyList();
-        return java.util.Arrays.stream(files)
-                .map(f -> f.getName())
-                .sorted(java.util.Collections.reverseOrder())
-                .toList();
+    private void validateDate(String date) {
+        if (date == null || !DATE_PATTERN.matcher(date).matches()) {
+            throw new IllegalArgumentException("日期格式不正确，应为 yyyy-MM-dd");
+        }
     }
 }

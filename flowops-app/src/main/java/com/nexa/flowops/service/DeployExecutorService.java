@@ -10,6 +10,7 @@ import com.nexa.flowops.service.generate.ConfigGeneratorChain;
 import com.nexa.flowops.service.generate.DeployContext;
 import com.nexa.flowops.util.DockerUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,7 +19,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.zip.ZipInputStream;
 
@@ -33,6 +36,13 @@ public class DeployExecutorService {
     private final ObjectMapper objectMapper;
     private final ConfigGeneratorChain configGeneratorChain;
     private final String storagePath = "/data/flowops/services";
+
+    @Value("${app.logs.path}")
+    private String logsBasePath;
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH-mm-ss");
+    private static final long MAX_LOG_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
     public DeployExecutorService(DeployServiceMapper serviceMapper,
                                   DeployRecordMapper recordMapper,
@@ -146,7 +156,12 @@ public class DeployExecutorService {
         record.setServiceId(serviceId);
         record.setCreateTime(LocalDateTime.now());
 
-        String logPath = storagePath + "/logs/" + service.getName() + "-" + System.currentTimeMillis() + ".log";
+        // 日志路径：{logsBasePath}/{projectId}/{serviceId}/deploy/{date}/{HH-mm-ss}.log
+        String date = LocalDateTime.now().format(DATE_FMT);
+        String time = LocalDateTime.now().format(TIME_FMT);
+        String logDir = logsBasePath + "/" + service.getProjectId() + "/" + serviceId + "/deploy/" + date;
+        String logPath = resolveLogFilePath(logDir, time);
+        record.setLogPath(logPath);
 
         try {
             // 构建上下文并生成配置文件
@@ -180,8 +195,7 @@ public class DeployExecutorService {
             Process process = pb.start();
 
             String output = readProcessOutput(process);
-            Files.createDirectories(new File(logPath).getParentFile().toPath());
-            Files.writeString(new File(logPath).toPath(), output);
+            appendLogContent(logPath, output);
 
             int exitCode = process.waitFor();
             if (exitCode != 0) {
@@ -200,9 +214,7 @@ public class DeployExecutorService {
                 log.info("[{}] 部署成功，容器已正常运行", service.getName());
                 // 追加容器内服务的运行日志
                 String containerLogs = getContainerLogs(volumeDir);
-                Files.writeString(new File(logPath).toPath(),
-                        "\n\n===== 服务运行日志 =====\n" + containerLogs,
-                        java.nio.file.StandardOpenOption.APPEND);
+                appendLogContent(logPath, "\n\n===== 服务运行日志 =====\n" + containerLogs);
                 record.setStatus("success");
                 service.setStatus("running");
                 serviceMapper.updateById(service);
@@ -217,9 +229,7 @@ public class DeployExecutorService {
                 serviceMapper.updateById(service);
                 recordMapper.insert(record);
                 // 将容器日志追加到部署日志文件
-                Files.writeString(new File(logPath).toPath(),
-                        "\n\n===== 容器启动失败日志 =====\n" + containerLogs,
-                        java.nio.file.StandardOpenOption.APPEND);
+                appendLogContent(logPath, "\n\n===== 容器启动失败日志 =====\n" + containerLogs);
                 return Result.fail("部署失败：容器未能正常启动，请查看部署日志");
             }
         } catch (Exception e) {
@@ -427,5 +437,28 @@ public class DeployExecutorService {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 解析日志文件路径，同一秒内多次部署追加序号，超过 100MB 时拆分文件
+     */
+    private String resolveLogFilePath(String logDir, String time) {
+        String base = logDir + "/" + time;
+        String path = base + ".log";
+        int seq = 2;
+        while (new File(path).exists() && new File(path).length() >= MAX_LOG_FILE_SIZE) {
+            path = base + "-" + seq + ".log";
+            seq++;
+        }
+        return path;
+    }
+
+    /**
+     * 追加内容到日志文件，自动创建目录
+     */
+    private void appendLogContent(String logPath, String content) throws IOException {
+        File logFile = new File(logPath);
+        Files.createDirectories(logFile.getParentFile().toPath());
+        Files.writeString(logFile.toPath(), content, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 }

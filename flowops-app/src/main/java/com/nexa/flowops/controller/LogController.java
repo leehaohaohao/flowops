@@ -1,5 +1,6 @@
 package com.nexa.flowops.controller;
 
+import com.nexa.flowops.common.anno.RequirePermission;
 import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.service.LogService;
 import org.springframework.web.bind.annotation.*;
@@ -16,21 +17,37 @@ public class LogController {
         this.logService = logService;
     }
 
+    @RequirePermission(value = "VIEW", projectId = "serviceId")
     @GetMapping("/list")
-    public Result<List<String>> list() {
-        return Result.ok(logService.listLogs());
+    public Result<List<String>> list(
+            @RequestParam Long serviceId,
+            @RequestParam String type,
+            @RequestParam String date) {
+        return Result.ok(logService.listLogFiles(serviceId, type, date));
     }
 
+    @RequirePermission(value = "VIEW", projectId = "serviceId")
     @GetMapping("/content")
     public Result<String> content(
+            @RequestParam Long serviceId,
+            @RequestParam String type,
+            @RequestParam String date,
             @RequestParam String filename,
             @RequestParam(defaultValue = "0") long offset,
-            @RequestParam(defaultValue = "1000") long limit) {
+            @RequestParam(defaultValue = "4096") long limit) {
         try {
-            String content = logService.getLogContent(filename, offset, limit);
-            return Result.ok(content);
-        } catch (Exception e) {
+            String data = logService.getLogContent(serviceId, type, date, filename, offset, limit);
+            return Result.ok(data);
+        } catch (IllegalArgumentException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    @RequirePermission(value = "VIEW", projectId = "serviceId")
+    @GetMapping("/dates")
+    public Result<List<String>> dates(
+            @RequestParam Long serviceId,
+            @RequestParam String type) {
+        return Result.ok(logService.listLogDates(serviceId, type));
     }
 }

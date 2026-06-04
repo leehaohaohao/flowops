@@ -1,8 +1,10 @@
 package com.nexa.flowops.ws;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.util.DockerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,6 +32,7 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(ContainerLogWebSocketHandler.class);
 
     private final DeployServiceMapper serviceMapper;
+    private final DockerUtil dockerUtil;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService readerPool = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r);
@@ -40,12 +43,33 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> sessionFlags = new ConcurrentHashMap<>();
 
-    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper) {
+    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper, DockerUtil dockerUtil) {
         this.serviceMapper = serviceMapper;
+        this.dockerUtil = dockerUtil;
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 从 URL query 参数获取 token 进行认证
+        String query = session.getUri() != null ? session.getUri().getQuery() : null;
+        String token = null;
+        if (query != null) {
+            for (String param : query.split("&")) {
+                String[] kv = param.split("=", 2);
+                if (kv.length == 2 && "token".equals(kv[0])) {
+                    token = kv[1];
+                    break;
+                }
+            }
+        }
+        if (token == null || token.isEmpty()) {
+            session.close(new CloseStatus(4001, "缺少认证 token"));
+            return;
+        }
+        if (StpUtil.getLoginIdByToken(token) == null) {
+            session.close(new CloseStatus(4003, "认证失败"));
+            return;
+        }
         log.info("容器日志 WebSocket 连接建立: {}", session.getId());
         sessionFlags.put(session.getId(), new AtomicBoolean(true));
     }
@@ -80,7 +104,7 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             String serviceName = service.getName();
 
             // 构建 docker compose logs 命令
-            ProcessBuilder pb = new ProcessBuilder(
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(
                     "docker", "compose", "logs",
                     "--tail", String.valueOf(tail),
                     "--no-color",
@@ -88,7 +112,6 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
                     serviceName
             );
             pb.directory(new java.io.File(volumeDir));
-            pb.redirectErrorStream(true);
 
             log.info("[{}] 启动容器日志流: follow={}, tail={}", serviceName, follow, tail);
             Process process = pb.start();
