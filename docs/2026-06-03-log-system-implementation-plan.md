@@ -9,32 +9,6 @@
 
 ---
 
-## Phase 4: 前端 - 类型与 API 层
-
-### Step 4.1: types/index.ts 增加类型
-
-**文件**: `flowops-front/src/types/index.ts`
-
-- `Project` 接口增加 `runningCount?: number`
-- 新增 `LogFileInfo` 接口（备用）
-
-### Step 4.2: 重构 api/logs.ts
-
-**文件**: `flowops-front/src/api/logs.ts`
-
-```typescript
-getLogFiles(serviceId, type, date)                    // GET /api/logs/list
-getLogDates(serviceId, type)                          // GET /api/logs/dates
-getLogContent(serviceId, type, date, filename, offset?, limit?)  // GET /api/logs/content
-getContainerLogs(serviceId, tail?)                    // GET /api/deploy/logs/:id (保持)
-```
-
-### Step 4.3: api/projects.ts 无需改动
-
-后端 `ProjectDetailVO` 新增 `runningCount` 字段，现有 `getProjectList()` 自动获取。
-
----
-
 ## Phase 5: 前端 - DeployLogs 页面重写
 
 ### Step 5.1: 重写 DeployLogs.tsx
