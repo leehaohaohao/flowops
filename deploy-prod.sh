@@ -92,6 +92,7 @@ docker run -d \
     -p "$PORT:8080" \
     -e "SPRING_PROFILES_ACTIVE=$PROFILE" \
     --env-file "$ENV_FILE" \
+    -v "$ENV_FILE:/app/$ENV_NAME:ro" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR:/data/flowops" \
     "$IMAGE_NAME:latest"
