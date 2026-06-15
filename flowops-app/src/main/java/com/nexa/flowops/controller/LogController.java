@@ -37,7 +37,7 @@ public class LogController {
             @RequestParam(defaultValue = "4096") long limit) {
         try {
             String data = logService.getLogContent(serviceId, type, date, filename, offset, limit);
-            return Result.ok(data);
+            return Result.ok(null, data);
         } catch (IllegalArgumentException e) {
             return Result.fail(e.getMessage());
         }
