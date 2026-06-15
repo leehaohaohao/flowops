@@ -3,9 +3,10 @@ set -e
 
 # ==========================================
 #  FlowOps 生产部署脚本
-#  用法: bash deploy-prod.sh <jar包名> [profile]
+#  用法: bash deploy-prod.sh <jar包名> [profile] [env文件]
 #  示例: bash deploy-prod.sh flowops-app-1.1.0.jar
-#         bash deploy-prod.sh app.jar dev
+#         bash deploy-prod.sh app.jar prod .env.prod
+#         bash deploy-prod.sh app.jar local .env.local
 # ==========================================
 
 IMAGE_NAME="flowops"
@@ -14,6 +15,7 @@ PORT="${PORT:-8880}"
 DATA_DIR="/data/flowops"
 APP_DIR="/app/flowops"
 PROFILE="${2:-prod}"
+ENV_NAME="${3:-.env.$PROFILE}"
 
 echo "=========================================="
 echo "  FlowOps 生产部署"
@@ -43,12 +45,12 @@ if ! command -v docker &>/dev/null; then
     exit 1
 fi
 
-# 检查 .env.prod 文件
+# 检查环境变量文件
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env.prod"
+ENV_FILE="$SCRIPT_DIR/$ENV_NAME"
 if [ ! -f "$ENV_FILE" ]; then
-    echo "[ERROR] 未找到 .env.prod 文件"
-    echo "请复制 .env.prod.example 为 .env.prod 并填入真实配置"
+    echo "[ERROR] 未找到 $ENV_NAME 文件"
+    echo "请复制 .env.prod.example 为 $ENV_NAME 并填入真实配置"
     exit 1
 fi
 
@@ -89,9 +91,9 @@ docker run -d \
     --restart unless-stopped \
     -p "$PORT:8080" \
     -e "SPRING_PROFILES_ACTIVE=$PROFILE" \
+    --env-file "$ENV_FILE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR:/data/flowops" \
-    -v "$ENV_FILE:/app/.env.prod:ro" \
     "$IMAGE_NAME:latest"
 
 # 等待启动

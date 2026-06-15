@@ -1,0 +1,14 @@
+# ==========================================
+#  FlowOps 虚拟机本地环境配置
+#  启动: java -jar app.jar --spring.profiles.active=local
+# ==========================================
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+logging:
+  level:
+    com.nexa.flowops: DEBUG
