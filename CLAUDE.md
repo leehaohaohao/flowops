@@ -5,30 +5,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build/Run/Test
 
 ```bash
-./mvnw compile              # Compile (Maven wrapper)
-./mvnw test                 # Run all tests (currently only contextLoads smoke test)
-./mvnw spring-boot:run      # Run locally on port 8080
-./mvnw package -DskipTests  # Build fat JAR
+./mvnw compile              # Compile all modules
+./mvnw test                 # Run tests (currently only contextLoads smoke test)
+./mvnw spring-boot:run -pl flowops-app   # Run locally on port 8080
+./mvnw package -DskipTests  # Build fat JAR (output: flowops-app/target/)
+```
+
+Frontend is in a separate repo at `D:\project\front\flowops-front` (React + Vite + Ant Design 6):
+```bash
+npm run dev        # Dev server (proxies to localhost:8080)
+npm run build      # Prod build (outputs to backend static resources)
+npm run build:vm   # VM build (API points to 192.168.48.129:8880)
 ```
 
 ## Architecture
 
-FlowOps is a self-hosted CI/CD deployment platform — a single-module Spring Boot 3.3.0 monolith (Java 17, Maven) with a Thymeleaf server-rendered UI (Bootstrap 5 CDN, vanilla JS).
+FlowOps is a self-hosted CI/CD deployment platform. Multi-module Maven project (Java 17, Spring Boot 3.3.0).
 
-**Package layout** (`com.nexa.flowops`):
-- `controller/` — REST APIs (`/api/*`) + `PageController` for Thymeleaf page routes
-- `service/` — Business logic; `DeployExecutorService` is the core deployment engine
-- `entity/` + `mapper/` — MyBatis-Plus data layer (MySQL, three tables)
-- `config/` — SaTokenConfig (auth interceptor), TraceFilter (MDC traceId), WebSocketConfig
-- `common/Result.java` — Unified API response wrapper `{code, msg, data}` used by all controllers
+### Modules
 
-**Key design decisions:**
-- **Docker CLI, not SDK**: The original `docker-java` SDK dependency was removed. All container operations use `ProcessBuilder` to invoke `docker`/`docker-compose` CLI directly. See `DeployExecutorService` and `DockerUtil`.
-- **Auth**: Sa-Token with JWT tokens (`token-style: jwt`), cookies enabled (`is-read-cookie: true`). Excluded paths: `/auth/login`, `/auth/captcha`, `/error`.
-- **Passwords stored in plaintext** — acknowledged tech debt, code comments say "生产环境应使用 BCrypt".
-- **WebSocket at `/ws/logs`** is configured but the handler is a stub (empty `TextMessageHandler`).
-- **Artifact storage**: `/data/flowops/services/{service-name}/` — JARs, dist directories, and generated docker-compose.yml files live here.
+- **flowops-common** — `Result` response wrapper, `BusinessException`, `PasswordUtil` (BCrypt), permission annotations (`@RequirePermission`, `@RequireProjectSupervisor`)
+- **flowops-permission** — Auth (Sa-Token JWT), RBAC with projects/roles/members. `ExternalDataProvider` SPI interface for cross-module queries
+- **flowops-app** — Main application: deploy engine, service CRUD, log system, WebSocket handlers. Implements `ExternalDataProvider` via `FlowOpsExternalDataProvider`
 
-**Database**: MySQL `flowops` database on `localhost:3306` (root/123456). Tables: `sys_user`, `deploy_service`, `deploy_record`. Init script at `src/main/resources/sql/init.sql`. Default admin: `admin/admin123`.
+### Key Design Decisions
 
-**Frontend auth flow**: Token stored in `localStorage`, sent via `Authorization` header on API calls. JS helper: `api()` in `static/js/app.js`.
+- **Docker CLI, not SDK**: All container ops use `ProcessBuilder` to invoke `docker`/`docker-compose` CLI via `DockerUtil`. No docker-java dependency.
+- **Config generation chain**: `ConfigGenerator` interface + `ConfigGeneratorChain` + Spring `@Order`. Generators: `DockerfileGenerator` → `NginxConfGenerator` → `ComposeYmlGenerator`. Called by `DeployExecutorService` before deploy.
+- **Auth**: Sa-Token with JWT stateless mode. Excluded paths: `/auth/**`, static assets, `/error`. Permission enforced via `PermissionAspect` (AOP) + `PermissionInterceptor` (URL patterns).
+- **Cross-module SPI**: Permission module defines `ExternalDataProvider` interface; app module provides `FlowOpsExternalDataProvider` implementation. No compile-time dependency from permission → app.
+- **Log system**: `LogSource` SPI with `LocalDockerLogSource` implementation. Logs stored at `{app.logs.path}/{projectId}/{serviceId}/{type}/{date}/`. WebSocket endpoints: `/ws/logs` (file tailing, 2s polling) and `/ws/container-logs` (live `docker compose logs --follow`).
+- **dotenv-java**: `DotenvPostProcessor` loads `.env.{profile}` into Spring Environment before YAML parsing. Priority: system env vars > dotenv > yml.
+
+### REST API Routes
+
+- `/auth/**` — Login/logout/info (`AuthController`)
+- `/api/services` — Service CRUD (`ServiceController`)
+- `/api/deploy/**` — Upload, start, stop, restart, remove, status, logs (`DeployController`)
+- `/api/logs/**` — Log file listing and content (`LogController`)
+- `/api/stats/dashboard` — Dashboard stats (`StatsController`)
+- `/api/users`, `/api/projects`, `/api/projects/{id}/members`, `/api/roles`, `/api/permissions` — Permission module controllers
+
+### Database
+
+MySQL `flowops` database. Init scripts:
+- App tables: `flowops-app/src/main/resources/sql/init.sql` (deploy_service, deploy_record)
+- Permission tables: `flowops-permission/src/main/resources/sql/permission-schema.sql` + `permission-data.sql`
+- Migrations: `V2_0_0__add_extra_ports.sql`, `V2_1_0__add_port_mappings.sql`, `V2_2_0__add_deploy_name.sql`
+
+Default admin: `admin/admin123` (BCrypt hashed).
+
+### Configuration Profiles
+
+- `dev` — localhost MySQL, DEBUG logging
+- `prod` — DB from env vars, INFO logging
+- `local` — DB from env vars, DEBUG logging (for VM deployment)
+
+Environment secrets via `.env` files: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`.
+
+### Deployment
+
+Deploy script: `deploy-prod.sh <jar> [profile] [env-file]`
+- `./deploy-prod.sh app.jar` — prod profile, `.env.prod`
+- `./deploy-prod.sh app.jar local .env.local` — local profile, `.env.local`
+- Uses `--env-file` for Docker env vars + `-v` mount for DotenvPostProcessor file reading
+- Container exposes port 8080, mapped to host port 8880 by default
+
+Artifact storage: `/data/flowops/services/{deployName}/` — JARs, dist dirs, generated docker-compose.yml
