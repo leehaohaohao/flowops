@@ -407,15 +407,23 @@ public class DeployExecutorService {
         }
     }
 
-    public String getContainerLogs(Long serviceId, int tail) {
+    public String getContainerLogs(Long serviceId, int tail, String since, String until, boolean timestamps) {
         DeployService service = serviceMapper.selectById(serviceId);
         if (service == null) {
             return "服务不存在";
         }
         try {
-            ProcessBuilder pb = dockerUtil.newProcessBuilder(
-                    "docker", "compose", "logs", "--tail", String.valueOf(tail), "--no-color", service.getName()
-            );
+            List<String> cmd = new ArrayList<>(Arrays.asList(
+                    "docker", "compose", "logs",
+                    "--tail", String.valueOf(tail),
+                    "--no-color"
+            ));
+            if (timestamps) cmd.add("--timestamps");
+            if (since != null && !since.isEmpty()) { cmd.add("--since"); cmd.add(since); }
+            if (until != null && !until.isEmpty()) { cmd.add("--until"); cmd.add(until); }
+            cmd.add(service.getName());
+
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(cmd.toArray(new String[0]));
             pb.directory(new File(service.getVolumeDir()));
             Process proc = pb.start();
             String output = readProcessOutput(proc);

@@ -4,6 +4,7 @@
 
 | 日期 | 文档 | 说明 |
 |------|------|------|
+| 2026-06-15 | [container-log-enhancement-plan.md](2026-06-15-container-log-enhancement-plan.md) | 容器日志查询增强：since/until/timestamps/grep（待实现） |
 | 2026-06-03 | [log-system-implementation-plan.md](2026-06-03-log-system-implementation-plan.md) | 日志系统重构实施计划（待实现） |
 
 ## archive/

@@ -15,6 +15,9 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -23,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 容器运行日志实时推送 WebSocket
- * 客户端发送 JSON: {"serviceId": 1, "tail": 200, "follow": true}
+ * 客户端发送 JSON: {"serviceId": 1, "tail": 200, "follow": true, "since": "2h", "until": "", "timestamps": true, "grep": "ERROR"}
  * 服务端推送: {"type":"status/statusLine/line/end/error", ...}
  */
 @Component
@@ -88,6 +91,10 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             Long serviceId = serviceIdNum.longValue();
             int tail = params.containsKey("tail") ? ((Number) params.get("tail")).intValue() : 200;
             boolean follow = !params.containsKey("follow") || (boolean) params.get("follow");
+            String since = params.containsKey("since") ? (String) params.get("since") : null;
+            String until = params.containsKey("until") ? (String) params.get("until") : null;
+            boolean timestamps = params.containsKey("timestamps") && (boolean) params.get("timestamps");
+            String grep = params.containsKey("grep") ? (String) params.get("grep") : null;
 
             DeployService service = serviceMapper.selectById(serviceId);
             if (service == null) {
@@ -104,16 +111,22 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             String serviceName = service.getName();
 
             // 构建 docker compose logs 命令
-            ProcessBuilder pb = dockerUtil.newProcessBuilder(
+            List<String> cmd = new ArrayList<>(Arrays.asList(
                     "docker", "compose", "logs",
                     "--tail", String.valueOf(tail),
                     "--no-color",
-                    follow ? "--follow" : "--no-follow",
-                    serviceName
-            );
+                    follow ? "--follow" : "--no-follow"
+            ));
+            if (timestamps) cmd.add("--timestamps");
+            if (since != null && !since.isEmpty()) { cmd.add("--since"); cmd.add(since); }
+            if (until != null && !until.isEmpty()) { cmd.add("--until"); cmd.add(until); }
+            cmd.add(serviceName);
+
+            ProcessBuilder pb = dockerUtil.newProcessBuilder(cmd.toArray(new String[0]));
             pb.directory(new java.io.File(volumeDir));
 
-            log.info("[{}] 启动容器日志流: follow={}, tail={}", serviceName, follow, tail);
+            log.info("[{}] 启动容器日志流: follow={}, tail={}, since={}, until={}, timestamps={}, grep={}",
+                    serviceName, follow, tail, since, until, timestamps, grep);
             Process process = pb.start();
             activeProcesses.put(sessionId, process);
 
@@ -123,14 +136,21 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             final AtomicBoolean flag = running;
 
             // 线程池读取并推送日志行
+            final String grepFilter = grep;
             readerPool.submit(() -> {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream()))) {
+                    String desc = (follow ? "实时跟踪" : "最近 " + tail + " 行");
+                    if (since != null && !since.isEmpty()) desc += ", since=" + since;
+                    if (grepFilter != null && !grepFilter.isEmpty()) desc += ", grep=" + grepFilter;
                     sendJson(session, Map.of("type", "statusLine", "msg",
-                            "已连接 " + serviceName + " 容器日志 (" + (follow ? "实时跟踪" : "最近 " + tail + " 行") + ")"));
+                            "已连接 " + serviceName + " 容器日志 (" + desc + ")"));
 
                     String line;
                     while (flag.get() && session.isOpen() && (line = reader.readLine()) != null) {
+                        if (grepFilter != null && !grepFilter.isEmpty() && !line.contains(grepFilter)) {
+                            continue;
+                        }
                         sendJson(session, Map.of("type", "line", "msg", line));
                     }
                 } catch (Exception e) {
