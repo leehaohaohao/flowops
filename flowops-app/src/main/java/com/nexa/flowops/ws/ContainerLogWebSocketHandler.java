@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.docker.DockerClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -14,9 +15,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.io.File;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -34,6 +33,7 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(ContainerLogWebSocketHandler.class);
 
     private final DeployServiceMapper serviceMapper;
+    private final DockerClient dockerClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService readerPool = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r);
@@ -44,8 +44,9 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> sessionFlags = new ConcurrentHashMap<>();
 
-    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper) {
+    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper, DockerClient dockerClient) {
         this.serviceMapper = serviceMapper;
+        this.dockerClient = dockerClient;
     }
 
     @Override
@@ -108,37 +109,22 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             String volumeDir = service.getVolumeDir();
 
             // 测试 Docker 连接
-            ProcessBuilder testPb = new ProcessBuilder("docker", "info");
-            testPb.redirectErrorStream(true);
-            Process testProc = testPb.start();
-            String testOutput = readProcessOutput(testProc);
-            int testExit = testProc.waitFor();
-            log.info("[{}] Docker info 测试, exitCode={}, output={}", deployName, testExit,
-                    testOutput.length() > 200 ? testOutput.substring(0, 200) : testOutput);
-            if (testExit != 0) {
-                sendJson(session, Map.of("type", "error", "msg", "Docker 守护进程连接失败: " + testOutput));
+            if (!dockerClient.isDockerAvailable()) {
+                sendJson(session, Map.of("type", "error", "msg", "Docker 守护进程连接失败"));
                 return;
             }
 
-            // 构建 docker compose logs 命令（通过 --project-directory 指定项目路径）
-            List<String> cmd = new ArrayList<>(Arrays.asList(
-                    "docker", "compose",
-                    "--project-directory", volumeDir,
-                    "logs",
-                    "--tail", String.valueOf(tail)
-            ));
-            if (timestamps) cmd.add("--timestamps");
-            if (since != null && !since.isEmpty()) { cmd.add("--since"); cmd.add(since); }
-            if (until != null && !until.isEmpty()) { cmd.add("--until"); cmd.add(until); }
-            if (follow) cmd.add("--follow");
+            // 构建日志选项
+            DockerClient.LogsOptions options = DockerClient.LogsOptions.builder()
+                    .tail(tail)
+                    .since(since)
+                    .until(until)
+                    .timestamps(timestamps)
+                    .build();
 
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.redirectErrorStream(true);
-
-            log.info("[{}] 执行命令: {}", deployName, String.join(" ", cmd));
             log.info("[{}] 启动容器日志流: follow={}, tail={}, since={}, until={}, timestamps={}, grep={}",
                     deployName, follow, tail, since, until, timestamps, grep);
-            Process process = pb.start();
+            Process process = dockerClient.composeLogsFollow(new File(volumeDir), options);
             activeProcesses.put(sessionId, process);
 
             AtomicBoolean running = sessionFlags.get(sessionId);
@@ -239,16 +225,5 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
         if (session.isOpen()) {
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(data)));
         }
-    }
-
-    private String readProcessOutput(Process process) throws Exception {
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
-            }
-        }
-        return sb.toString();
     }
 }

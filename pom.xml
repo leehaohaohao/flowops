@@ -17,6 +17,7 @@
 
 	<modules>
 		<module>flowops-common</module>
+		<module>flowops-docker</module>
 		<module>flowops-permission</module>
 		<module>flowops-app</module>
 	</modules>
