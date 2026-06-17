@@ -35,7 +35,6 @@ public class DeployExecutorService {
     private final DockerUtil dockerUtil;
     private final ObjectMapper objectMapper;
     private final ConfigGeneratorChain configGeneratorChain;
-    private final String storagePath = "/data/flowops/services";
 
     @Value("${app.logs.path}")
     private String logsBasePath;
@@ -402,33 +401,6 @@ public class DeployExecutorService {
             String output = readProcessOutput(proc);
             proc.waitFor();
             return output;
-        } catch (Exception e) {
-            return "获取容器日志失败: " + e.getMessage();
-        }
-    }
-
-    public String getContainerLogs(Long serviceId, int tail, String since, String until, boolean timestamps) {
-        DeployService service = serviceMapper.selectById(serviceId);
-        if (service == null) {
-            return "服务不存在";
-        }
-        try {
-            List<String> cmd = new ArrayList<>(Arrays.asList(
-                    "docker", "compose", "logs",
-                    "--tail", String.valueOf(tail),
-                    "--no-color"
-            ));
-            if (timestamps) cmd.add("--timestamps");
-            if (since != null && !since.isEmpty()) { cmd.add("--since"); cmd.add(since); }
-            if (until != null && !until.isEmpty()) { cmd.add("--until"); cmd.add(until); }
-            cmd.add(service.getName());
-
-            ProcessBuilder pb = dockerUtil.newProcessBuilder(cmd.toArray(new String[0]));
-            pb.directory(new File(service.getVolumeDir()));
-            Process proc = pb.start();
-            String output = readProcessOutput(proc);
-            proc.waitFor();
-            return output.isEmpty() ? "暂无日志" : output;
         } catch (Exception e) {
             return "获取容器日志失败: " + e.getMessage();
         }

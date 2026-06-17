@@ -4,7 +4,6 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
-import com.nexa.flowops.util.DockerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -35,7 +34,6 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(ContainerLogWebSocketHandler.class);
 
     private final DeployServiceMapper serviceMapper;
-    private final DockerUtil dockerUtil;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService readerPool = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r);
@@ -46,9 +44,8 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> sessionFlags = new ConcurrentHashMap<>();
 
-    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper, DockerUtil dockerUtil) {
+    public ContainerLogWebSocketHandler(DeployServiceMapper serviceMapper) {
         this.serviceMapper = serviceMapper;
-        this.dockerUtil = dockerUtil;
     }
 
     @Override
@@ -107,26 +104,40 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
 
             sendJson(session, Map.of("type", "status", "msg", "正在连接容器日志..."));
 
+            String deployName = service.getDeployName();
             String volumeDir = service.getVolumeDir();
-            String serviceName = service.getName();
 
-            // 构建 docker compose logs 命令
+            // 测试 Docker 连接
+            ProcessBuilder testPb = new ProcessBuilder("docker", "info");
+            testPb.redirectErrorStream(true);
+            Process testProc = testPb.start();
+            String testOutput = readProcessOutput(testProc);
+            int testExit = testProc.waitFor();
+            log.info("[{}] Docker info 测试, exitCode={}, output={}", deployName, testExit,
+                    testOutput.length() > 200 ? testOutput.substring(0, 200) : testOutput);
+            if (testExit != 0) {
+                sendJson(session, Map.of("type", "error", "msg", "Docker 守护进程连接失败: " + testOutput));
+                return;
+            }
+
+            // 构建 docker compose logs 命令（通过 --project-directory 指定项目路径）
             List<String> cmd = new ArrayList<>(Arrays.asList(
-                    "docker", "compose", "logs",
-                    "--tail", String.valueOf(tail),
-                    "--no-color",
-                    follow ? "--follow" : "--no-follow"
+                    "docker", "compose",
+                    "--project-directory", volumeDir,
+                    "logs",
+                    "--tail", String.valueOf(tail)
             ));
             if (timestamps) cmd.add("--timestamps");
             if (since != null && !since.isEmpty()) { cmd.add("--since"); cmd.add(since); }
             if (until != null && !until.isEmpty()) { cmd.add("--until"); cmd.add(until); }
-            cmd.add(serviceName);
+            if (follow) cmd.add("--follow");
 
-            ProcessBuilder pb = dockerUtil.newProcessBuilder(cmd.toArray(new String[0]));
-            pb.directory(new java.io.File(volumeDir));
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
 
+            log.info("[{}] 执行命令: {}", deployName, String.join(" ", cmd));
             log.info("[{}] 启动容器日志流: follow={}, tail={}, since={}, until={}, timestamps={}, grep={}",
-                    serviceName, follow, tail, since, until, timestamps, grep);
+                    deployName, follow, tail, since, until, timestamps, grep);
             Process process = pb.start();
             activeProcesses.put(sessionId, process);
 
@@ -138,16 +149,19 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
             // 线程池读取并推送日志行
             final String grepFilter = grep;
             readerPool.submit(() -> {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream()))) {
+                StringBuilder outputBuffer = new StringBuilder();
+                BufferedReader reader = null;
+                try {
+                    reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                     String desc = (follow ? "实时跟踪" : "最近 " + tail + " 行");
                     if (since != null && !since.isEmpty()) desc += ", since=" + since;
                     if (grepFilter != null && !grepFilter.isEmpty()) desc += ", grep=" + grepFilter;
                     sendJson(session, Map.of("type", "statusLine", "msg",
-                            "已连接 " + serviceName + " 容器日志 (" + desc + ")"));
+                            "已连接 " + deployName + " 容器日志 (" + desc + ")"));
 
                     String line;
                     while (flag.get() && session.isOpen() && (line = reader.readLine()) != null) {
+                        outputBuffer.append(line).append("\n");
                         if (grepFilter != null && !grepFilter.isEmpty() && !line.contains(grepFilter)) {
                             continue;
                         }
@@ -158,6 +172,24 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
                         log.warn("[{}] 日志读取异常: {}", sessionId, e.getMessage());
                     }
                 } finally {
+                    if (reader != null) {
+                        try { reader.close(); } catch (Exception ignored) {}
+                    }
+                    int exitCode = -1;
+                    try {
+                        exitCode = process.waitFor();
+                    } catch (InterruptedException ignored) {
+                    }
+                    log.info("[{}] docker logs 退出, exitCode={}", deployName, exitCode);
+                    if (exitCode != 0 && flag.get() && session.isOpen()) {
+                        String errorDetail = outputBuffer.length() > 0
+                                ? outputBuffer.toString().trim()
+                                : "docker compose logs 退出码: " + exitCode;
+                        try {
+                            sendJson(session, Map.of("type", "error", "msg", "容器日志获取失败: " + errorDetail));
+                        } catch (Exception ignored) {
+                        }
+                    }
                     process.destroy();
                     activeProcesses.remove(sessionId);
                     if (flag.get() && session.isOpen()) {
@@ -166,7 +198,7 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
                         } catch (Exception ignored) {
                         }
                     }
-                    log.info("[{}] 容器日志流结束: {}", serviceName, sessionId);
+                    log.info("[{}] 容器日志流结束: {}", deployName, sessionId);
                 }
             }, "container-log-" + sessionId);
 
@@ -207,5 +239,16 @@ public class ContainerLogWebSocketHandler extends TextWebSocketHandler {
         if (session.isOpen()) {
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(data)));
         }
+    }
+
+    private String readProcessOutput(Process process) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+        }
+        return sb.toString();
     }
 }

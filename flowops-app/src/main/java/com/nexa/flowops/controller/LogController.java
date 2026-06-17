@@ -2,7 +2,6 @@ package com.nexa.flowops.controller;
 
 import com.nexa.flowops.common.anno.RequirePermission;
 import com.nexa.flowops.common.base.Result;
-import com.nexa.flowops.service.DeployExecutorService;
 import com.nexa.flowops.service.LogService;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,11 +12,9 @@ import java.util.List;
 public class LogController {
 
     private final LogService logService;
-    private final DeployExecutorService deployService;
 
-    public LogController(LogService logService, DeployExecutorService deployService) {
+    public LogController(LogService logService) {
         this.logService = logService;
-        this.deployService = deployService;
     }
 
     @RequirePermission(value = "VIEW", projectId = "serviceId")
@@ -62,7 +59,7 @@ public class LogController {
             @RequestParam(required = false) String since,
             @RequestParam(required = false) String until,
             @RequestParam(defaultValue = "false") boolean timestamps) {
-        String logs = deployService.getContainerLogs(serviceId, tail, since, until, timestamps);
+        String logs = logService.getContainerLogs(serviceId, tail, since, until, timestamps);
         return Result.ok(null, logs);
     }
 }
