@@ -1,5 +1,6 @@
 package com.nexa.flowops;
 
+import com.nexa.protocol.master.autoconfigure.EnableNexaMaster;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -7,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import java.io.File;
 
 @SpringBootApplication
+@EnableNexaMaster
 public class FlowopsApplication {
 
 	public static void main(String[] args) {

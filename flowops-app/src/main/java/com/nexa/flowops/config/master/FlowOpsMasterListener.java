@@ -1,0 +1,37 @@
+package com.nexa.flowops.config.master;
+
+import com.nexa.protocol.master.NexaMasterListener;
+import com.nexa.protocol.master.RunnerSession;
+import com.nexa.protocol.Register.RegisterRequest;
+import com.nexa.protocol.Register.RegisterResponse;
+import com.nexa.protocol.Heartbeat.HeartbeatRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+@Component
+public class FlowOpsMasterListener implements NexaMasterListener {
+
+    private static final Logger log = LoggerFactory.getLogger(FlowOpsMasterListener.class);
+
+    @Override
+    public RegisterResponse onRegister(RunnerSession session, RegisterRequest req) {
+        log.info("[Master] 子节点注册: runnerId={}, hostname={}, ip={}, version={}",
+                req.getRunnerId(), req.getHostname(), req.getIp(), req.getVersion());
+        return RegisterResponse.newBuilder()
+                .setSuccess(true)
+                .setMessage("ok")
+                .build();
+    }
+
+    @Override
+    public void onHeartbeat(RunnerSession session, HeartbeatRequest req) {
+        log.debug("[Master] 心跳: runnerId={}, runningTasks={}, cpuUsage={}, memoryUsage={}",
+                req.getRunnerId(), req.getRunningTasks(), req.getCpuUsage(), req.getMemoryUsage());
+    }
+
+    @Override
+    public void onDisconnect(String runnerId, String reason) {
+        log.info("[Master] 子节点断开: runnerId={}, reason={}", runnerId, reason);
+    }
+}

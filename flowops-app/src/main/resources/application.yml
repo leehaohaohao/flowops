@@ -50,3 +50,12 @@ app:
     path: /data/flowops/logs
     max-file-size: 104857600    # 100MB
 
+# Nexa Protocol Master 配置（分布式子节点通信）
+nexa:
+  master:
+    enabled: true
+    host: 127.0.0.1
+    port: 9090
+    heartbeat-timeout: 30s
+    heartbeat-check-interval: 5s
+

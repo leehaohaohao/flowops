@@ -66,6 +66,11 @@
 			<groupId>io.github.cdimascio</groupId>
 			<artifactId>dotenv-java</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.nexa</groupId>
+			<artifactId>nexa-protocol</artifactId>
+			<version>0.1.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
