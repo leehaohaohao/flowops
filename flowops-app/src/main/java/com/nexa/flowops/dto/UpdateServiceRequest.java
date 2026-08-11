@@ -10,4 +10,5 @@ public class UpdateServiceRequest {
     private String portMappings;
     private String serviceType;
     private String serviceConfig;
+    private String nodeId;
 }

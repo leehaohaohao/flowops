@@ -2,7 +2,7 @@ package com.nexa.flowops.controller;
 
 import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.NodeInfoVO;
-import com.nexa.flowops.service.NodeService;
+import com.nexa.flowops.service.node.NodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

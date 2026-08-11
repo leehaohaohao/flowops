@@ -55,6 +55,7 @@ public class ServiceMgmtService {
         service.setServiceType(req.getServiceType());
         service.setServiceConfig(req.getServiceConfig());
         service.setProjectId(req.getProjectId());
+        service.setNodeId(req.getNodeId());
         service.setVolumeDir(storagePath + "/" + req.getDeployName());
         service.setStatus("stopped");
         serviceMapper.insert(service);
@@ -101,6 +102,9 @@ public class ServiceMgmtService {
         }
         if (req.getServiceConfig() != null) {
             service.setServiceConfig(req.getServiceConfig());
+        }
+        if (req.getNodeId() != null) {
+            service.setNodeId(req.getNodeId());
         }
         serviceMapper.updateById(service);
     }

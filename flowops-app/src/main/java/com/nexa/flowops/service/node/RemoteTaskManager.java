@@ -1,0 +1,154 @@
+package com.nexa.flowops.service.node;
+
+import com.nexa.flowops.entity.DeployRecord;
+import com.nexa.flowops.entity.DeployService;
+import com.nexa.flowops.mapper.DeployRecordMapper;
+import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.protocol.Task.TaskResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+/**
+ * 远程任务回执管理：登记下发任务，收到子节点回执后落库 deploy_record + 更新服务状态，
+ * 并对节点掉线 / 超时任务标记失败。
+ */
+@Component
+public class RemoteTaskManager {
+
+    private static final Logger log = LoggerFactory.getLogger(RemoteTaskManager.class);
+
+    private static final long DEFAULT_TIMEOUT_MS = 10 * 60 * 1000L; // 10 分钟
+
+    private final DeployRecordMapper recordMapper;
+    private final DeployServiceMapper serviceMapper;
+
+    private final ConcurrentMap<String, PendingTask> pendingTasks = new ConcurrentHashMap<>();
+
+    public RemoteTaskManager(DeployRecordMapper recordMapper, DeployServiceMapper serviceMapper) {
+        this.recordMapper = recordMapper;
+        this.serviceMapper = serviceMapper;
+    }
+
+    public static long defaultTimeoutMs() {
+        return DEFAULT_TIMEOUT_MS;
+    }
+
+    public void register(PendingTask task) {
+        pendingTasks.put(task.taskId(), task);
+    }
+
+    /**
+     * 子节点回执回调入口（由 FlowOpsMasterListener 调用）
+     */
+    public void onTaskResult(TaskResponse resp) {
+        PendingTask task = pendingTasks.remove(resp.getTaskId());
+        if (task == null) {
+            log.warn("[Master] 收到未知任务回执: taskId={}, runnerId={}, success={}",
+                    resp.getTaskId(), resp.getRunnerId(), resp.getSuccess());
+            return;
+        }
+
+        DeployService service = serviceMapper.selectById(task.serviceId());
+        DeployRecord record = recordMapper.selectById(task.recordId());
+
+        StringBuilder content = new StringBuilder();
+        content.append("===== 子节点回执 =====\n");
+        content.append("runnerId: ").append(resp.getRunnerId()).append("\n");
+        content.append("exitCode: ").append(resp.getExitCode()).append("\n");
+        if (resp.getOutput() != null && !resp.getOutput().isEmpty()) {
+            content.append("----- output -----\n").append(resp.getOutput()).append("\n");
+        }
+        if (resp.getError() != null && !resp.getError().isEmpty()) {
+            content.append("----- error -----\n").append(resp.getError()).append("\n");
+        }
+        appendLog(task.logPath(), content.toString());
+
+        if (record != null) {
+            record.setStatus(resp.getSuccess() ? "success" : "failed");
+            record.setRemark(resp.getSuccess()
+                    ? "子节点执行成功: " + resp.getRunnerId()
+                    : "子节点执行失败: " + resp.getRunnerId() + "，exitCode=" + resp.getExitCode());
+            recordMapper.updateById(record);
+        }
+
+        if (service != null) {
+            service.setStatus(resp.getSuccess() ? task.successStatus() : "stopped");
+            serviceMapper.updateById(service);
+        }
+
+        if (resp.getSuccess()) {
+            log.info("[Master] 任务执行成功: taskId={}, serviceId={}, nodeId={}",
+                    task.taskId(), task.serviceId(), task.nodeId());
+        } else {
+            log.warn("[Master] 任务执行失败: taskId={}, serviceId={}, nodeId={}, exitCode={}",
+                    task.taskId(), task.serviceId(), task.nodeId(), resp.getExitCode());
+        }
+    }
+
+    /**
+     * 节点掉线时，将该节点上所有 pending 任务标记失败
+     */
+    public void failTasksForNode(String nodeId, String reason) {
+        if (nodeId == null) return;
+        int failed = 0;
+        for (Map.Entry<String, PendingTask> entry : pendingTasks.entrySet()) {
+            PendingTask task = entry.getValue();
+            if (nodeId.equals(task.nodeId()) && pendingTasks.remove(entry.getKey(), task)) {
+                failTask(task, "节点掉线: " + reason);
+                failed++;
+            }
+        }
+        if (failed > 0) {
+            log.warn("[Master] 节点 {} 掉线，已标记 {} 个 pending 任务为失败", nodeId, failed);
+        }
+    }
+
+    /**
+     * 定时清扫超时未回执的任务
+     */
+    @Scheduled(fixedDelay = 15000, initialDelay = 30000)
+    public void sweepTimeouts() {
+        for (Map.Entry<String, PendingTask> entry : pendingTasks.entrySet()) {
+            PendingTask task = entry.getValue();
+            if (task.expired() && pendingTasks.remove(entry.getKey(), task)) {
+                failTask(task, "任务超时（超过 " + (task.timeoutMs() / 60000) + " 分钟未收到回执）");
+            }
+        }
+    }
+
+    private void failTask(PendingTask task, String reason) {
+        DeployRecord record = recordMapper.selectById(task.recordId());
+        if (record != null) {
+            record.setStatus("failed");
+            record.setRemark(reason);
+            recordMapper.updateById(record);
+        }
+        DeployService service = serviceMapper.selectById(task.serviceId());
+        if (service != null) {
+            service.setStatus("stopped");
+            serviceMapper.updateById(service);
+        }
+        appendLog(task.logPath(), "===== 任务失败 =====\n" + reason + "\n");
+        log.warn("[Master] 任务标记失败: taskId={}, serviceId={}, nodeId={}, reason={}",
+                task.taskId(), task.serviceId(), task.nodeId(), reason);
+    }
+
+    private void appendLog(String logPath, String content) {
+        try {
+            File logFile = new File(logPath);
+            Files.createDirectories(logFile.getParentFile().toPath());
+            Files.writeString(logFile.toPath(), content, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            log.error("写入部署日志失败: logPath={}", logPath, e);
+        }
+    }
+}

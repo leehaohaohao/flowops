@@ -11,4 +11,5 @@ public class CreateServiceRequest {
     private String portMappings;
     private String serviceType;
     private String serviceConfig;
+    private String nodeId;
 }

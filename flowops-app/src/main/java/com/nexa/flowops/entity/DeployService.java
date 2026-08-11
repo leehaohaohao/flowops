@@ -18,6 +18,7 @@ public class DeployService {
     private String serviceType;    // 服务类型：backend / frontend / fullstack
     private String serviceConfig;  // 结构化配置 JSON
     private String status;         // running, stopped
+    private String nodeId;         // 目标执行节点 runnerId；null/空=本机，auto=自动调度
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

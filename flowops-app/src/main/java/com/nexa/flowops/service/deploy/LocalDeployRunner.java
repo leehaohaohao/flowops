@@ -1,4 +1,4 @@
-package com.nexa.flowops.service;
+package com.nexa.flowops.service.deploy;
 
 import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.ContainerStatusVO;
@@ -11,160 +11,44 @@ import com.nexa.flowops.service.generate.DeployContext;
 import com.nexa.flowops.docker.DockerClient;
 import com.nexa.flowops.docker.DockerResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.zip.ZipInputStream;
+import java.util.Map;
 
-@Service
-public class DeployExecutorService {
+/**
+ * 本机部署执行：通过 DockerClient 在本节点执行 docker compose 生命周期操作
+ */
+@Component
+public class LocalDeployRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(DeployExecutorService.class);
+    private static final Logger log = LoggerFactory.getLogger(LocalDeployRunner.class);
 
     private final DeployServiceMapper serviceMapper;
     private final DeployRecordMapper recordMapper;
     private final DockerClient dockerClient;
     private final ObjectMapper objectMapper;
     private final ConfigGeneratorChain configGeneratorChain;
+    private final DeployLogHelper logHelper;
 
-    @Value("${app.logs.path}")
-    private String logsBasePath;
-
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH-mm-ss");
-    private static final long MAX_LOG_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-
-    public DeployExecutorService(DeployServiceMapper serviceMapper,
-                                  DeployRecordMapper recordMapper,
-                                  DockerClient dockerClient,
-                                  ObjectMapper objectMapper,
-                                  ConfigGeneratorChain configGeneratorChain) {
+    public LocalDeployRunner(DeployServiceMapper serviceMapper,
+                             DeployRecordMapper recordMapper,
+                             DockerClient dockerClient,
+                             ObjectMapper objectMapper,
+                             ConfigGeneratorChain configGeneratorChain,
+                             DeployLogHelper logHelper) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.dockerClient = dockerClient;
         this.objectMapper = objectMapper;
         this.configGeneratorChain = configGeneratorChain;
+        this.logHelper = logHelper;
     }
 
-    // ==================== 上传辅助 ====================
-
-    public String getUploadPath(Long serviceId, String type) {
-        DeployService service = serviceMapper.selectById(serviceId);
-        if (service == null) {
-            throw new RuntimeException("服务不存在: " + serviceId);
-        }
-        String path = service.getVolumeDir();
-        if ("dist".equals(type)) {
-            path = path + "/dist";
-        }
-        return path;
-    }
-
-    public void extractDist(MultipartFile file, String targetDir) throws IOException {
-        File dir = new File(targetDir);
-        if (dir.exists()) {
-            deleteDirectory(dir);
-        }
-        dir.mkdirs();
-
-        // 记录条目信息：name -> byte[]（文件内容），目录条目 value 为 null
-        record ZipEntryData(String name, byte[] data) {}
-        List<ZipEntryData> entries = new ArrayList<>();
-        Set<String> topDirs = new LinkedHashSet<>();
-
-        // 单次遍历：读取所有条目到内存，同时检测顶层目录
-        try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
-            java.util.zip.ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String name = entry.getName();
-                if (entry.isDirectory()) {
-                    entries.add(new ZipEntryData(name, null));
-                    String noSlash = name.endsWith("/") ? name.substring(0, name.length() - 1) : name;
-                    if (!noSlash.contains("/")) {
-                        topDirs.add(noSlash);
-                    }
-                } else {
-                    entries.add(new ZipEntryData(name, zis.readAllBytes()));
-                    if (!name.contains("/")) {
-                        topDirs.add(name);
-                    }
-                }
-            }
-        }
-
-        // 判断是否需要跳过顶层目录
-        String stripPrefix = null;
-        if (topDirs.size() == 1) {
-            String candidate = topDirs.iterator().next() + "/";
-            boolean allUnder = entries.stream().allMatch(e ->
-                    e.name.startsWith(candidate) || e.name.equals(candidate.substring(0, candidate.length() - 1)));
-            if (allUnder) {
-                stripPrefix = candidate;
-                log.info("检测到 zip 单层根目录「{}」，自动跳过", topDirs.iterator().next());
-            }
-        }
-
-        // 写入文件
-        for (ZipEntryData zd : entries) {
-            String name = zd.name;
-            if (stripPrefix != null && name.startsWith(stripPrefix)) {
-                name = name.substring(stripPrefix.length());
-            }
-            if (name.isEmpty()) continue;
-
-            File newFile = new File(targetDir, name);
-            if (zd.data == null) {
-                newFile.mkdirs();
-            } else {
-                new File(newFile.getParent()).mkdirs();
-                try (FileOutputStream fos = new FileOutputStream(newFile)) {
-                    fos.write(zd.data);
-                }
-            }
-        }
-    }
-
-    private void deleteDirectory(File dir) {
-        File[] files = dir.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (f.isDirectory()) {
-                    deleteDirectory(f);
-                } else {
-                    f.delete();
-                }
-            }
-        }
-        dir.delete();
-    }
-
-    // ==================== 部署 ====================
-
-    public Result<Void> deploy(Long serviceId) {
-        DeployService service = serviceMapper.selectById(serviceId);
-        DeployRecord record = new DeployRecord();
-        record.setServiceId(serviceId);
-        record.setCreateTime(LocalDateTime.now());
-
-        // 日志路径：{logsBasePath}/{projectId}/{serviceId}/deploy/{date}/{HH-mm-ss}.log
-        String date = LocalDateTime.now().format(DATE_FMT);
-        String time = LocalDateTime.now().format(TIME_FMT);
-        String logDir = logsBasePath + "/" + service.getProjectId() + "/" + serviceId + "/deploy/" + date;
-        String logPath = resolveLogFilePath(logDir, time);
-        record.setLogPath(logPath);
-
+    public Result<Void> runStart(DeployService service, DeployRecord record) {
+        String logPath = record.getLogPath();
         try {
             // 构建上下文并生成配置文件
             DeployContext context = DeployContext.from(service, objectMapper);
@@ -186,7 +70,7 @@ public class DeployExecutorService {
             log.info("[{}] 执行 docker compose up -d --build", service.getName());
             DockerResult upResult = dockerClient.composeUp(new File(volumeDir), composePath, true);
 
-            appendLogContent(logPath, upResult.output());
+            logHelper.appendLogContent(logPath, upResult.output());
 
             if (!upResult.isSuccess()) {
                 log.error("[{}] docker compose up 失败，退出码={}，输出:\n{}", service.getName(), upResult.exitCode(), upResult.output());
@@ -204,7 +88,7 @@ public class DeployExecutorService {
                 log.info("[{}] 部署成功，容器已正常运行", service.getName());
                 // 追加容器内服务的运行日志
                 String containerLogs = getContainerLogs(volumeDir);
-                appendLogContent(logPath, "\n\n===== 服务运行日志 =====\n" + containerLogs);
+                logHelper.appendLogContent(logPath, "\n\n===== 服务运行日志 =====\n" + containerLogs);
                 record.setStatus("success");
                 service.setStatus("running");
                 serviceMapper.updateById(service);
@@ -219,7 +103,7 @@ public class DeployExecutorService {
                 serviceMapper.updateById(service);
                 recordMapper.insert(record);
                 // 将容器日志追加到部署日志文件
-                appendLogContent(logPath, "\n\n===== 容器启动失败日志 =====\n" + containerLogs);
+                logHelper.appendLogContent(logPath, "\n\n===== 容器启动失败日志 =====\n" + containerLogs);
                 return Result.fail("部署失败：容器未能正常启动，请查看部署日志");
             }
         } catch (Exception e) {
@@ -230,10 +114,7 @@ public class DeployExecutorService {
         }
     }
 
-    // ==================== 容器操作 ====================
-
-    public Result<Void> stopContainer(Long serviceId) {
-        DeployService service = serviceMapper.selectById(serviceId);
+    public Result<Void> runStop(DeployService service) {
         try {
             String composePath = service.getVolumeDir() + "/docker-compose.yml";
             log.info("[{}] 执行 docker compose stop", service.getName());
@@ -250,8 +131,7 @@ public class DeployExecutorService {
         }
     }
 
-    public Result<Void> restartContainer(Long serviceId) {
-        DeployService service = serviceMapper.selectById(serviceId);
+    public Result<Void> runRestart(DeployService service) {
         try {
             String composePath = service.getVolumeDir() + "/docker-compose.yml";
             log.info("[{}] 执行 docker compose restart", service.getName());
@@ -271,8 +151,7 @@ public class DeployExecutorService {
         }
     }
 
-    public Result<Void> removeContainer(Long serviceId) {
-        DeployService service = serviceMapper.selectById(serviceId);
+    public Result<Void> runRemove(DeployService service) {
         try {
             String composePath = service.getVolumeDir() + "/docker-compose.yml";
             log.info("[{}] 执行 docker compose down", service.getName());
@@ -289,13 +168,13 @@ public class DeployExecutorService {
         }
     }
 
-    public Result<ContainerStatusVO> getContainerStatus(Long serviceId) {
-        DeployService service = serviceMapper.selectById(serviceId);
+    public ContainerStatusVO getStatus(DeployService service) {
+        // 注：远程节点的容器状态需通过子节点上报获取，当前仅支持本机容器状态
         boolean running = dockerClient.isContainerRunning(service.getName());
         ContainerStatusVO vo = new ContainerStatusVO();
         vo.setRunning(running);
         vo.setStatus(running ? "running" : "stopped");
-        return Result.ok(vo);
+        return vo;
     }
 
     // ==================== 部署健康检查 ====================
@@ -356,30 +235,5 @@ public class DeployExecutorService {
         DockerClient.LogsOptions options = DockerClient.LogsOptions.builder().tail(30).build();
         DockerResult result = dockerClient.composeLogs(new File(volumeDir), options);
         return result.isSuccess() ? result.output() : "获取容器日志失败: " + result.output();
-    }
-
-    // ==================== 工具方法 ====================
-
-    /**
-     * 解析日志文件路径，同一秒内多次部署追加序号，超过 100MB 时拆分文件
-     */
-    private String resolveLogFilePath(String logDir, String time) {
-        String base = logDir + "/" + time;
-        String path = base + ".log";
-        int seq = 2;
-        while (new File(path).exists() && new File(path).length() >= MAX_LOG_FILE_SIZE) {
-            path = base + "-" + seq + ".log";
-            seq++;
-        }
-        return path;
-    }
-
-    /**
-     * 追加内容到日志文件，自动创建目录
-     */
-    private void appendLogContent(String logPath, String content) throws IOException {
-        File logFile = new File(logPath);
-        Files.createDirectories(logFile.getParentFile().toPath());
-        Files.writeString(logFile.toPath(), content, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 }
