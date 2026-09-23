@@ -63,9 +63,20 @@ public class NodeService {
     }
 
     public boolean isOnline(String runnerId) {
-        return nexaMaster().getSessionManager().get(runnerId)
+        return getSession(runnerId)
                 .map(RunnerSession::isActive)
                 .orElse(false);
+    }
+
+    /**
+     * 当前 runnerId 绑定的会话（可能为空）。
+     * 供重连场景判定“是否已有健康的新会话”，识别旧会话的迟到断开事件。
+     */
+    public Optional<RunnerSession> getSession(String runnerId) {
+        if (runnerId == null) {
+            return Optional.empty();
+        }
+        return nexaMaster().getSessionManager().get(runnerId);
     }
 
     /**

@@ -117,7 +117,9 @@ public class NodeController {
         NexaNodeVO vo = new NexaNodeVO();
         vo.setRunnerId(node.getRunnerId());
         vo.setNodeName(node.getNodeName());
-        vo.setStatus(node.getStatus());
+        // 在线状态以实时会话为准：主节点重启、会话被顶替、进程异常退出后
+        // nexa_node.status 快照可能滞后，不能直接当作当前状态展示
+        vo.setStatus(nodeService.isOnline(node.getRunnerId()) ? "online" : "offline");
         vo.setLastHeartbeat(node.getLastHeartbeat());
         vo.setCreateTime(node.getCreateTime());
         vo.setHasToken(node.getToken() != null && !node.getToken().isBlank());

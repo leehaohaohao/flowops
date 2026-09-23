@@ -20,6 +20,16 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * 远程任务回执管理：登记下发任务，收到子节点回执后落库 deploy_record + 更新服务状态，
  * 并对节点掉线 / 超时任务标记失败。
+ *
+ * <p>重连语义（见 docs/2026-09-23-runner-connection-recovery-plan.md）：
+ * <ul>
+ *   <li>连接恢复只恢复“接收新任务”的能力，<b>不会重放</b>断线前的任务——
+ *       避免重复执行部署动作；未回执的任务由 {@link #sweepTimeouts()} 超时清扫标记失败</li>
+ *   <li>只有与任务下发节点一致的会话回执才会被采纳（L2 身份校验，见
+ *       {@link #onTaskResult(TaskResponse, String)}）</li>
+ *   <li>节点掉线时由 {@code FlowOpsMasterListener.onDisconnect} 触发失败化；
+ *       若该节点已重连成功（存在健康新会话），迟到断开事件会被跳过，不会误伤新会话任务</li>
+ * </ul>
  */
 @Component
 public class RemoteTaskManager {

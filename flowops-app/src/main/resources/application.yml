@@ -54,8 +54,10 @@ app:
 nexa:
   master:
     enabled: true
-    host: 127.0.0.1
-    port: 9090
+    # 监听地址：127.0.0.1 仅本机联调可用；跨机器部署必须改为子节点可达的地址
+    # （容器内通常用 0.0.0.0，并放通端口与防火墙），通过 NEXA_MASTER_HOST 覆盖
+    host: ${NEXA_MASTER_HOST:127.0.0.1}
+    port: ${NEXA_MASTER_PORT:9090}
     heartbeat-timeout: 30s
     heartbeat-check-interval: 5s
 
