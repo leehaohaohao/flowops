@@ -1,10 +1,10 @@
 # 远程部署完善（产物传输 + 远程状态/日志 + 前端节点支持）可行性分析
 
-> **实施状态（2026-08-11 更新）**：
-> - ✅ **步骤 1（后端）已实现**：`ArtifactDownloadController`（`GET /api/deploy/artifact/{serviceId}` 流式 tar 下载，共享密钥 `nexa.master.artifact-token` 鉴权）+ `RemoteDeployDispatcher` 填充 `artifact_url`
+> **实施状态（2026-08-25 更新）**：
+> - ✅ **步骤 1（后端）已实现后已被取代**：原 `ArtifactDownloadController`（HTTP tar 下载）已按 `2026-08-25-artifact-standardization-node-auth-plan.md` **删除**，产物传输改为协议分块（`service/artifact/ArtifactTransferManager`）+ 注册表
 > - ✅ **步骤 4（后端）已实现**：`QueryManager`（按 runnerId 同步等待回执）、`FlowOpsMasterListener` 查询回执回调、`DeployExecutorService.getContainerStatus` / `LogService.getContainerLogs` 按 nodeId 路由
-> - ⬜ **步骤 2 / 5（子节点 flowops-executor）**、**步骤 3 剩余（协议，v0.4.0 已发布）**、**步骤 6（前端）** 待做
-> - 依赖变更：`flowops-app` 升级 nexa-protocol 0.4.0，新增 commons-compress
+> - ⬜ **步骤 2 / 5（子节点 flowops-executor）**、**步骤 6（前端）** 待做；步骤 3 协议 v0.4.0 → v0.5.0 已发布
+> - 依赖变更：`flowops-app` 升级 nexa-protocol 0.5.0，新增 commons-compress
 
 ## Context
 

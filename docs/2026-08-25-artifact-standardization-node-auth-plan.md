@@ -1,5 +1,12 @@
 # 产物标准化管理与子节点认证（注册表 + 自定义协议传输 + L1/L2 认证）可行性分析
 
+> **实施状态（2026-08-25 更新）**：
+> - ✅ **步骤 2（后端）已实现**：`deploy_artifact` / `nexa_node` 表（V3_1_0 / V3_1_1 迁移）、`service/artifact` 包（`ArtifactStore`/`LocalArtifactStore`/`ArtifactRegistry`/`ArtifactTransferManager`）、上传登记（jar/binary/dist）、HTTP 产物端点已删除、`RemoteDeployDispatcher` 移除 artifact_url、`FlowOpsMasterListener` L1 注册 token 校验 + `onArtifactRequest` 回调 + L2 回执身份校验（`RemoteTaskManager.onTaskResult(resp, sessionRunnerId)`）、**节点登记管理 API（仅超管）**、删除服务级联清理注册表
+> - 节点登记管理 API（`nexa_node` 注册表，token 明文传入、服务端自动 sha256，无需手工加密/插库）：`GET/POST /api/nodes/registry`、`PUT/DELETE /api/nodes/registry/{runnerId}`（原 `POST /api/nodes/{runnerId}/token` 已并入，待决策 1 的「管理 API」方案落地）
+> - ⬜ **步骤 1（协议 v0.5.0）已完成发布**；**步骤 3（子节点 flowops-executor：token 配置 + 客户端传输）** 待做
+> - 依赖变更：`flowops-app` 升级 nexa-protocol 0.5.0；common 新增 `DigestUtil`（sha256）
+> - 说明：实体/Mapper 按项目既有约定放在 `com.nexa.flowops.entity` / `com.nexa.flowops.mapper`（而非计划草图中的 `service/artifact/entity` 子包），与 `type-aliases-package` 配置一致
+
 ## Context
 
 远程部署链路已打通：任务下发、配置随消息传输、子节点执行 docker 并回执。但产物传输当前基于 **HTTP**（`ArtifactDownloadController` 流式 tar + 共享密钥），且子节点**无任何认证**（`onRegister` 无脑接受注册）。产品方向要求三点改造：
