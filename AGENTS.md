@@ -1,74 +1,60 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for agents working in this repository. Check code and tests before treating a dated plan as current status.
 
-## Build/Run/Test
+## Build, Run, Test
 
 ```bash
-./mvnw compile              # Compile all modules
-./mvnw test                 # Run tests (currently only contextLoads smoke test)
-./mvnw spring-boot:run -pl flowops-app   # Run locally on port 8080
-./mvnw package -DskipTests  # Build fat JAR (output: flowops-app/target/)
+./mvnw compile                                  # Compile all four modules
+./mvnw test                                     # Run the test suite
+./mvnw test -pl flowops-app -am -Dtest=ArtifactTransferLinkTest -Dsurefire.failIfNoSpecifiedTests=false
+./mvnw spring-boot:run -pl flowops-app           # Local app, port 8080
+./mvnw package -DskipTests                      # App JAR in flowops-app/target/
 ```
 
-Frontend is in a separate repo at `D:\project\front\flowops-front` (React + Vite + Ant Design 6):
-```bash
-npm run dev        # Dev server (proxies to localhost:8080)
-npm run build      # Prod build (outputs to backend static resources)
-npm run build:vm   # VM build (API points to 192.168.48.129:8880)
-```
+On Windows use `mvnw.cmd` in place of `./mvnw`; in PowerShell, quote `'-Dsurefire.failIfNoSpecifiedTests=false'`. `FlowopsApplicationTests` requires application/database configuration; `ArtifactTransferLinkTest` starts an in-process protocol master with mocked mappers and does not require a real Go runner or MySQL.
+
+Related repositories:
+
+- Frontend: `D:\project\front\flowops-front` (React, TypeScript, Vite, Ant Design). `npm run dev` proxies `/auth`, `/api`, and `/ws` to the backend; `npm run build` and `npm run build:vm` use different environment modes. Check `vite.config.ts` and `.env.*` before assuming the build output path.
+- Runner: `D:\project\go\flowops-executor` (`go build ./...`). Its `go.mod` currently replaces `github.com/leehaohaohao/nexa-protocol/go` with the local protocol checkout.
+- Protocol: `D:\project\mix\nexa-protocol` (shared Protobuf contracts, Java master SDK, Go client SDK). The app depends on Java `com.nexa:nexa-protocol:0.5.0`; the runner uses Go protocol v0.5.0 through the local replace.
 
 ## Architecture
 
-FlowOps is a self-hosted CI/CD deployment platform. Multi-module Maven project (Java 17, Spring Boot 3.3.0).
+FlowOps is a self-hosted CI/CD deployment platform (Java 17, Spring Boot 3.3.0, MySQL, MyBatis-Plus). It is evolving from local Docker deployment to a master/runner design.
 
-### Modules
+- `flowops-common`: response/errors, password and digest helpers, permission annotations.
+- `flowops-docker`: `DockerClient` / `DefaultDockerClient` abstraction. It executes Docker CLI and Docker Compose through `ProcessBuilder`, not a Docker SDK.
+- `flowops-permission`: Sa-Token JWT authentication, project/member/role/permission RBAC, and the `ExternalDataProvider` SPI.
+- `flowops-app`: REST API, service/deployment orchestration, generated Docker config, artifact registry/transfer, node management, logs, WebSockets, and `FlowOpsExternalDataProvider` implementation.
 
-- **flowops-common** — `Result` response wrapper, `BusinessException`, `PasswordUtil` (BCrypt), permission annotations (`@RequirePermission`, `@RequireProjectSupervisor`)
-- **flowops-permission** — Auth (Sa-Token JWT), RBAC with projects/roles/members. `ExternalDataProvider` SPI interface for cross-module queries
-- **flowops-app** — Main application: deploy engine, service CRUD, log system, WebSocket handlers. Implements `ExternalDataProvider` via `FlowOpsExternalDataProvider`
+### Deployment and node flow
 
-### Key Design Decisions
+- `DeployExecutorService` routes operations by `DeployService.nodeId`. Blank means local; a specific runner ID means remote; `auto` selects an online runner with the fewest reported running tasks. Check each operation's fallback behavior in code rather than assuming it is uniform.
+- Local operations use `LocalDeployRunner` and `DockerClient`. `ConfigGeneratorChain` runs `DockerfileGenerator`, `NginxConfGenerator`, and `ComposeYmlGenerator` in Spring order.
+- Remote operations use `RemoteDeployDispatcher` to generate config, send `TaskRequest` through Nexa Protocol, and register a pending task. `RemoteTaskManager` records the asynchronous result, timeout, or node disconnect.
+- The Java `NexaMaster` accepts Go runner connections. `FlowOpsMasterListener` handles registration, heartbeats, disconnects, task/query responses, and artifact requests. `NodeService` tracks live sessions/load; `QueryManager` sends remote status/log requests and waits for responses.
+- `deploy_artifact` stores metadata/version/checksum pointing to files under the existing service volume directory. `ArtifactTransferManager` serves artifact chunks over Nexa Protocol; the runner requests, verifies SHA-256, saves/extracts, then runs Docker Compose. The former HTTP artifact download endpoint is removed.
+- Node registration uses a per-runner token stored as SHA-256 in `nexa_node`; `/api/nodes/registry` manages entries for super administrators. After registration, task responses and artifact requests use the bound session identity for authorization. Inspect each handler when changing authentication.
+- The log system uses `LogSource` / `LocalDockerLogSource`, REST log APIs, `/ws/logs` file tailing, and `/ws/container-logs` container logs. Remote container status/logs use protocol queries.
 
-- **Docker CLI, not SDK**: All container ops use `ProcessBuilder` to invoke `docker`/`docker-compose` CLI via `DockerUtil`. No docker-java dependency.
-- **Config generation chain**: `ConfigGenerator` interface + `ConfigGeneratorChain` + Spring `@Order`. Generators: `DockerfileGenerator` → `NginxConfGenerator` → `ComposeYmlGenerator`. Called by `DeployExecutorService` before deploy.
-- **Auth**: Sa-Token with JWT stateless mode. Excluded paths: `/auth/**`, static assets, `/error`. Permission enforced via `PermissionAspect` (AOP) + `PermissionInterceptor` (URL patterns).
-- **Cross-module SPI**: Permission module defines `ExternalDataProvider` interface; app module provides `FlowOpsExternalDataProvider` implementation. No compile-time dependency from permission → app.
-- **Log system**: `LogSource` SPI with `LocalDockerLogSource` implementation. Logs stored at `{app.logs.path}/{projectId}/{serviceId}/{type}/{date}/`. WebSocket endpoints: `/ws/logs` (file tailing, 2s polling) and `/ws/container-logs` (live `docker compose logs --follow`).
-- **dotenv-java**: `DotenvPostProcessor` loads `.env.{profile}` into Spring Environment before YAML parsing. Priority: system env vars > dotenv > yml.
+### Current distributed-development status
 
-### REST API Routes
+The latest relevant design is `docs/2026-08-25-artifact-standardization-node-auth-plan.md`; `docs/2026-08-11-remote-deploy-enhancement-plan.md` covers status/log queries and frontend node selection. Their dated implementation-status headers lag behind the current source: protocol v0.5.0, backend artifact registry/transfer and node authentication, and Go runner token/artifact handling are all present in code. The frontend also contains node selection and node management work; inspect its working tree because some changes may be uncommitted.
 
-- `/auth/**` — Login/logout/info (`AuthController`)
-- `/api/services` — Service CRUD (`ServiceController`)
-- `/api/deploy/**` — Upload, start, stop, restart, remove, status, logs (`DeployController`)
-- `/api/logs/**` — Log file listing and content (`LogController`)
-- `/api/stats/dashboard` — Dashboard stats (`StatsController`)
-- `/api/users`, `/api/projects`, `/api/projects/{id}/members`, `/api/roles`, `/api/permissions` — Permission module controllers
+Verification is narrower than implementation. `ArtifactTransferLinkTest` checks Java master-to-simulated-Java-client file transfer with mocked persistence. It does not prove a real Go runner, MySQL migrations, artifact upload, Docker build/start, status/logs, and UI work together. Treat end-to-end distributed deployment and L1/L2 authorization as awaiting real integration verification unless newer test or deployment evidence is available. Reconnect/retry and message replay are outside the 2026-08-25 plan.
 
-### Database
+## API and Storage
 
-MySQL `flowops` database. Init scripts:
-- App tables: `flowops-app/src/main/resources/sql/init.sql` (deploy_service, deploy_record)
-- Permission tables: `flowops-permission/src/main/resources/sql/permission-schema.sql` + `permission-data.sql`
-- Migrations: `V2_0_0__add_extra_ports.sql`, `V2_1_0__add_port_mappings.sql`, `V2_2_0__add_deploy_name.sql`
+- `/auth/**`: login/logout/user info.
+- `/api/services/**`, `/api/deploy/**`: service CRUD, uploads, lifecycle and status.
+- `/api/nodes`, `/api/nodes/{runnerId}`: live node information; `/api/nodes/registry/**`: node registration management.
+- `/api/logs/**`, `/api/stats/dashboard`: logs and dashboard.
+- `/api/users`, `/api/projects`, `/api/roles`, `/api/permissions`: permission module APIs.
+- App schema: `flowops-app/src/main/resources/sql/init.sql`; permission schema/data: `flowops-permission/src/main/resources/sql/`. App migrations include `V3_0_0__add_node_id.sql`, `V3_1_0__create_deploy_artifact.sql`, and `V3_1_1__create_nexa_node.sql`. Verify database migration execution in the target environment.
+- Artifact files and generated config live under `{app.storage.path}/{deployName}/` (default `/data/flowops/services`); logs use `{app.logs.path}`.
 
-Default admin: `admin/admin123` (BCrypt hashed).
+## Configuration and Deployment
 
-### Configuration Profiles
-
-- `dev` — localhost MySQL, DEBUG logging
-- `prod` — DB from env vars, INFO logging
-- `local` — DB from env vars, DEBUG logging (for VM deployment)
-
-Environment secrets via `.env` files: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`.
-
-### Deployment
-
-Deploy script: `deploy-prod.sh <jar> [profile] [env-file]`
-- `./deploy-prod.sh app.jar` — prod profile, `.env.prod`
-- `./deploy-prod.sh app.jar local .env.local` — local profile, `.env.local`
-- Uses `--env-file` for Docker env vars + `-v` mount for DotenvPostProcessor file reading
-- Container exposes port 8080, mapped to host port 8880 by default
-
-Artifact storage: `/data/flowops/services/{deployName}/` — JARs, dist dirs, generated docker-compose.yml
+Profiles: `dev`, `prod`, `local`. `DotenvPostProcessor` loads `.env.{profile}` before YAML binding; system environment variables take precedence over dotenv and YAML. Keep `.env` values and runner tokens out of logs and commits. `application.yml` defaults to port 8080 and enables the Nexa master on `127.0.0.1:9090`; check profile overrides and host binding when using a remote runner. `deploy-prod.sh <jar> [profile] [env-file]` runs the app container (host port 8880 by default).
