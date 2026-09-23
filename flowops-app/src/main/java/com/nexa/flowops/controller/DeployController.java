@@ -37,6 +37,8 @@ public class DeployController {
             }
             File targetFile = new File(uploadPath, filename);
             file.transferTo(targetFile);
+            // 产物登记（jar/binary 进注册表，供远程部署按需拉取）
+            deployService.registerArtifact(serviceId, type, targetFile);
             return Result.ok("上传成功", filename);
         } catch (Exception e) {
             return Result.fail("上传失败: " + e.getMessage());
@@ -51,6 +53,8 @@ public class DeployController {
         String uploadPath = deployService.getUploadPath(serviceId, "dist");
         try {
             deployService.extractDist(file, uploadPath);
+            // dist 产物登记
+            deployService.registerDist(serviceId);
             return Result.ok("前端文件上传成功");
         } catch (Exception e) {
             return Result.fail("上传失败: " + e.getMessage());

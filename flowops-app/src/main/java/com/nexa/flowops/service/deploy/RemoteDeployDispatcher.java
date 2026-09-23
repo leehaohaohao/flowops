@@ -18,9 +18,7 @@ import com.nexa.protocol.master.NexaMaster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,8 +43,6 @@ public class RemoteDeployDispatcher {
     private final NodeService nodeService;
     private final RemoteTaskManager remoteTaskManager;
     private final NexaMaster nexaMaster;
-    private final String artifactBaseUrl;
-    private final String artifactToken;
 
     public RemoteDeployDispatcher(DeployServiceMapper serviceMapper,
                                   DeployRecordMapper recordMapper,
@@ -54,9 +50,7 @@ public class RemoteDeployDispatcher {
                                   ConfigGeneratorChain configGeneratorChain,
                                   NodeService nodeService,
                                   RemoteTaskManager remoteTaskManager,
-                                  NexaMaster nexaMaster,
-                                  @Value("${nexa.master.artifact-base-url:http://127.0.0.1:8080}") String artifactBaseUrl,
-                                  @Value("${nexa.master.artifact-token:}") String artifactToken) {
+                                  NexaMaster nexaMaster) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.objectMapper = objectMapper;
@@ -64,8 +58,6 @@ public class RemoteDeployDispatcher {
         this.nodeService = nodeService;
         this.remoteTaskManager = remoteTaskManager;
         this.nexaMaster = nexaMaster;
-        this.artifactBaseUrl = artifactBaseUrl;
-        this.artifactToken = artifactToken;
     }
 
     /**
@@ -97,18 +89,14 @@ public class RemoteDeployDispatcher {
             Map<String, String> config = buildConfigMap(service);
 
             String taskId = UUID.randomUUID().toString();
-            TaskRequest.Builder reqBuilder = TaskRequest.newBuilder()
+            TaskRequest req = TaskRequest.newBuilder()
                     .setTaskId(taskId)
                     .setServiceId(String.valueOf(service.getId()))
                     .setDeployName(service.getDeployName())
                     .setAction(action)
                     .setVolumeDir(service.getVolumeDir())
-                    .putAllConfig(config);
-            String artifactUrl = buildArtifactUrl(service);
-            if (artifactUrl != null) {
-                reqBuilder.setArtifactUrl(artifactUrl);
-            }
-            TaskRequest req = reqBuilder.build();
+                    .putAllConfig(config)
+                    .build();
             Envelope envelope = ProtocolCodec.buildTaskDispatchRequest(nodeId, req);
 
             log.info("[{}] 远程任务下发: taskId={}, nodeId={}, action={}", service.getName(), taskId, nodeId, action);
@@ -178,20 +166,5 @@ public class RemoteDeployDispatcher {
                 log.warn("读取配置文件失败: {}", relativePath, e);
             }
         }
-    }
-
-    /**
-     * 拼接产物下载地址（子节点 START 前拉取 volumeDir tar 包），配置了令牌时附加 token。
-     */
-    private String buildArtifactUrl(DeployService service) {
-        String base = artifactBaseUrl == null ? "" : artifactBaseUrl.trim();
-        if (!base.endsWith("/")) {
-            base = base + "/";
-        }
-        String url = base + "api/deploy/artifact/" + service.getId();
-        if (StringUtils.hasText(artifactToken)) {
-            url = url + "?token=" + artifactToken;
-        }
-        return url;
     }
 }

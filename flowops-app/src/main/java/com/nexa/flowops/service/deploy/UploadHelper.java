@@ -1,7 +1,11 @@
 package com.nexa.flowops.service.deploy;
 
+import com.nexa.flowops.common.util.DigestUtil;
+import com.nexa.flowops.entity.DeployArtifact;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.service.artifact.ArtifactRegistry;
+import com.nexa.flowops.service.artifact.ArtifactStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -10,6 +14,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,9 +31,15 @@ public class UploadHelper {
     private static final Logger log = LoggerFactory.getLogger(UploadHelper.class);
 
     private final DeployServiceMapper serviceMapper;
+    private final ArtifactRegistry artifactRegistry;
+    private final ArtifactStore artifactStore;
 
-    public UploadHelper(DeployServiceMapper serviceMapper) {
+    public UploadHelper(DeployServiceMapper serviceMapper,
+                        ArtifactRegistry artifactRegistry,
+                        ArtifactStore artifactStore) {
         this.serviceMapper = serviceMapper;
+        this.artifactRegistry = artifactRegistry;
+        this.artifactStore = artifactStore;
     }
 
     public String getUploadPath(Long serviceId, String type) {
@@ -103,6 +115,61 @@ public class UploadHelper {
                     fos.write(zd.data);
                 }
             }
+        }
+    }
+
+    /**
+     * 单文件产物（jar/binary）上传登记：文件已落盘后调用，写入产物注册表（version+1）
+     */
+    public void registerArtifact(Long serviceId, String type, File savedFile) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        if (service == null) {
+            return;
+        }
+        String regType = switch (type == null ? "" : type) {
+            case "jar" -> "JAR";
+            case "binary" -> "BINARY";
+            default -> null; // 其他类型不纳入产物注册表
+        };
+        if (regType == null) {
+            return;
+        }
+        try {
+            long size = savedFile.length();
+            String checksum;
+            try (InputStream in = Files.newInputStream(savedFile.toPath())) {
+                checksum = DigestUtil.sha256Hex(in);
+            }
+            artifactRegistry.register(service.getId(), service.getDeployName(), regType,
+                    savedFile.getName(), savedFile.getAbsolutePath(), size, checksum);
+            log.info("[{}] 产物已登记: type={}, size={}B, checksum={}", service.getName(), regType, size, checksum);
+        } catch (Exception e) {
+            log.warn("[{}] 产物登记失败: type={}, err={}", service.getName(), regType, e.getMessage());
+        }
+    }
+
+    /**
+     * dist 目录登记：解压完成后调用，按确定性打包流计算大小与校验和
+     */
+    public void registerDist(Long serviceId) {
+        DeployService service = serviceMapper.selectById(serviceId);
+        if (service == null) {
+            return;
+        }
+        File distDir = new File(service.getVolumeDir(), "dist");
+        if (!distDir.exists() || !distDir.isDirectory()) {
+            log.warn("[{}] dist 目录不存在，跳过登记: {}", service.getName(), distDir);
+            return;
+        }
+        DeployArtifact tmp = new DeployArtifact();
+        tmp.setStoragePath(distDir.getAbsolutePath());
+        try (ArtifactStore.PreparedArtifact prepared = artifactStore.prepare(tmp)) {
+            artifactRegistry.register(service.getId(), service.getDeployName(), "DIST",
+                    "dist", distDir.getAbsolutePath(), prepared.size(), prepared.checksum());
+            log.info("[{}] dist 产物已登记: size={}B(packed), checksum={}", service.getName(),
+                    prepared.size(), prepared.checksum());
+        } catch (Exception e) {
+            log.warn("[{}] dist 产物登记失败: err={}", service.getName(), e.getMessage());
         }
     }
 

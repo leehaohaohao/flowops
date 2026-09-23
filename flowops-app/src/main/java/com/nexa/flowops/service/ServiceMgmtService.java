@@ -6,6 +6,7 @@ import com.nexa.flowops.dto.CreateServiceRequest;
 import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.service.artifact.ArtifactRegistry;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -18,10 +19,12 @@ public class ServiceMgmtService {
     private static final Pattern DEPLOY_NAME_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$");
 
     private final DeployServiceMapper serviceMapper;
+    private final ArtifactRegistry artifactRegistry;
     private final String storagePath = "/data/flowops/services";
 
-    public ServiceMgmtService(DeployServiceMapper serviceMapper) {
+    public ServiceMgmtService(DeployServiceMapper serviceMapper, ArtifactRegistry artifactRegistry) {
         this.serviceMapper = serviceMapper;
+        this.artifactRegistry = artifactRegistry;
     }
 
     public List<DeployService> list() {
@@ -119,6 +122,8 @@ public class ServiceMgmtService {
     }
 
     public void deleteService(Long id) {
+        // 级联清理产物注册表（存储文件随 volumeDir 清理，逻辑不变）
+        artifactRegistry.deleteByService(id);
         serviceMapper.deleteById(id);
     }
 }

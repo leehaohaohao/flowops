@@ -58,9 +58,4 @@ nexa:
     port: 9090
     heartbeat-timeout: 30s
     heartbeat-check-interval: 5s
-    # 产物下载：子节点拉取 volumeDir tar 包用
-    # artifact-base-url: 主节点 HTTP 地址（子节点需能访问），env: ARTIFACT_BASE_URL
-    # artifact-token: 共享密钥；为空表示内网信任免鉴权（生产建议配置），env: ARTIFACT_TOKEN
-    artifact-base-url: ${ARTIFACT_BASE_URL:http://127.0.0.1:8080}
-    artifact-token: ${ARTIFACT_TOKEN:}
 

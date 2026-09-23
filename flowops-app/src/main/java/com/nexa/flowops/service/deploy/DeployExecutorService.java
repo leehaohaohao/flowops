@@ -62,6 +62,14 @@ public class DeployExecutorService {
         uploadHelper.extractDist(file, targetDir);
     }
 
+    public void registerArtifact(Long serviceId, String type, java.io.File savedFile) {
+        uploadHelper.registerArtifact(serviceId, type, savedFile);
+    }
+
+    public void registerDist(Long serviceId) {
+        uploadHelper.registerDist(serviceId);
+    }
+
     // ==================== 部署 ====================
 
     public Result<Void> deploy(Long serviceId) {

@@ -47,15 +47,24 @@ public class RemoteTaskManager {
     }
 
     /**
-     * 子节点回执回调入口（由 FlowOpsMasterListener 调用）
+     * 子节点回执回调入口（由 FlowOpsMasterListener 调用）。
+     * sessionRunnerId 为回执消息所在会话的 runnerId，用于 L2 身份校验：
+     * 仅接受与任务下发节点一致的会话回执，伪造回执直接丢弃（pending 任务留待超时清扫标记失败）。
      */
-    public void onTaskResult(TaskResponse resp) {
-        PendingTask task = pendingTasks.remove(resp.getTaskId());
+    public void onTaskResult(TaskResponse resp, String sessionRunnerId) {
+        PendingTask task = pendingTasks.get(resp.getTaskId());
         if (task == null) {
             log.warn("[Master] 收到未知任务回执: taskId={}, runnerId={}, success={}",
                     resp.getTaskId(), resp.getRunnerId(), resp.getSuccess());
             return;
         }
+        // L2：会话身份必须与任务下发节点一致
+        if (sessionRunnerId == null || !sessionRunnerId.equals(task.nodeId())) {
+            log.warn("[Master] 丢弃伪造任务回执: taskId={}, 会话runnerId={}, 任务下发节点={}",
+                    resp.getTaskId(), sessionRunnerId, task.nodeId());
+            return;
+        }
+        pendingTasks.remove(resp.getTaskId());
 
         DeployService service = serviceMapper.selectById(task.serviceId());
         DeployRecord record = recordMapper.selectById(task.recordId());
