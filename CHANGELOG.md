@@ -8,6 +8,56 @@
 
 ---
 
+## 2.5.0 (2026-09-24)
+
+### 新功能
+
+- **分布式主从架构**：集成 nexa-protocol Master，支持子节点注册 / 心跳 / 断开管理（`config/master/FlowOpsMasterListener`、`service/node/NodeService`）
+- **远程部署**：主节点编排拆分为本机 / 远程两分支（`LocalDeployRunner` / `RemoteDeployDispatcher`），任务下发与回执落库，支持超时与节点掉线失败标记（`RemoteTaskManager`）
+- **节点分配**：`deploy_service.node_id` 支持本机（空）/ 指定节点 / `auto` 最少负载自动调度
+- **远程容器状态与日志查询**：协议同步查询（`QueryManager`），状态与容器日志按 nodeId 路由
+- **产物标准化**：新增 `deploy_artifact` 注册表（版本 + sha256），产物经协议分块传输（`ArtifactTransferManager`），上传自动登记（jar / binary / dist），删除服务级联清理
+- **子节点认证**：新增 `nexa_node` 注册表，L1 注册令牌（sha256 存储）+ L2 会话身份校验（任务回执、产物请求按会话身份鉴权）
+- **节点登记管理 API（仅超级管理员）**：`GET/POST /api/nodes/registry`、`PUT/DELETE /api/nodes/registry/{runnerId}`，令牌明文录入、服务端自动加密
+- **新增 flowops-docker 模块**：语义化 Docker SDK（`DockerClient` / `DefaultDockerClient`），统一封装 Docker CLI 调用
+- **日志系统**：新增 `LogSource` SPI 与 `LocalDockerLogSource`；REST 日志查询接口；`/ws/logs` 文件实时跟踪
+- 容器日志查询增强：支持 `since` / `until` / `timestamps` 参数
+- 服务列表新增 `runningCount` 字段
+
+### 优化
+
+- 重连事件加固：断开归属按协议会话注册表判定，任务与查询按会话代次归因，离线快照写后复查修正，避免旧会话清理误伤新会话工作
+- 容器日志获取逻辑由 `DeployExecutorService` 迁移至 `LogService`，职责收敛
+- 部署脚本支持多环境（`prod` / `local`），并挂载 `.env` 文件供 `DotenvPostProcessor` 读取
+- `nexa.master.host` / `port` 支持 `NEXA_MASTER_HOST` / `NEXA_MASTER_PORT` 覆盖，便于跨机器部署
+
+### 修复
+
+- 修复 `/api/logs/content` 将日志内容返回到 `msg` 而非 `data` 字段的问题
+- 提取 `TaskSchedulerConfig` 解决 `WebSocketConfig` 循环依赖
+
+### 移除
+
+- 移除 HTTP 产物下载端点及其配置（产物改由协议分块传输）
+
+### 数据库
+
+- `V3_0_0__add_node_id.sql`：`deploy_service` / `deploy_record` 增加 `node_id`
+- `V3_1_0__create_deploy_artifact.sql`：产物注册表
+- `V3_1_1__create_nexa_node.sql`：子节点注册表
+
+### 依赖
+
+- nexa-protocol 升级至 0.6.2（注册先认证后接管、已注册消息按连接会话鉴权、断开事件所有权统一）
+
+### 文档
+
+- docs 目录整理与归档，新增前端对接文档目录 `docs/frontend-api/`
+- 新增连接恢复与分布式联调计划、产物标准化与节点认证计划、前端对接与链接自测说明
+- 新增 `AGENTS.md` 仓库指引，更新 `CLAUDE.md` 架构说明
+
+---
+
 ## 2.4.0 (2026-06-04)
 
 ### 重构
