@@ -6,14 +6,11 @@ import com.nexa.protocol.Query.ContainerLogsResponse;
 import com.nexa.protocol.Query.ContainerStatusRequest;
 import com.nexa.protocol.Query.ContainerStatusResponse;
 import com.nexa.protocol.codec.ProtocolCodec;
-import com.nexa.protocol.master.NexaMaster;
 import com.nexa.protocol.master.RunnerSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,12 +24,10 @@ import java.util.concurrent.TimeoutException;
  * <p>关联方式：协议 v0.4.0 的回执回调 {@code onContainerStatus/onContainerLogs} 只携带
  * RunnerSession 与响应体（不带 Envelope.request_id），因此这里按 runnerId 关联，同一节点
  * 同一时刻只允许一个进行中的查询（HTTP 调用方同步等待，天然串行）。若向同一节点发起新查询
- * 时旧查询未回执，旧查询会被置为「被取代」而立即失败，避免悬挂。
+ * 时旧查询未回执，旧查询会被置为“被取代”而立即失败，避免悬挂。
  *
- * <p>注：子节点（flowops-executor）的响应 Envelope 已回填请求的 request_id（协议层 codec
- * builder 支持），但 v0.4.0 回调签名不透传 request_id，故此处无法按 request_id 关联。
- * 后续协议升级在回调中透传 request_id 后，可改为按 request_id 关联，以支持同节点并发
- * 查询与断线重连时的准确关联。
+ * <p>查询还记录发起时的<b>生效会话代次</b>：节点掉线清理只失败化同一代次的查询，
+ * 避免在“读注册表 → 清理”窗口内注册的新会话的查询被误失败化（见 D.2）。
  */
 @Component
 public class QueryManager {
@@ -43,26 +38,18 @@ public class QueryManager {
     private static final long DEFAULT_TIMEOUT_MS = 5000;
 
     /** runnerId -> 进行中的状态查询 */
-    private final ConcurrentMap<String, CompletableFuture<ContainerStatusResponse>> pendingStatus = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, PendingQuery<ContainerStatusResponse>> pendingStatus = new ConcurrentHashMap<>();
     /** runnerId -> 进行中的日志查询 */
-    private final ConcurrentMap<String, CompletableFuture<ContainerLogsResponse>> pendingLogs = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, PendingQuery<ContainerLogsResponse>> pendingLogs = new ConcurrentHashMap<>();
 
-    /**
-     * ObjectProvider 惰性获取 NexaMaster，避免构造循环：
-     * FlowOpsMasterListener → QueryManager → NexaMaster → FlowOpsMasterListener
-     */
-    private final ObjectProvider<NexaMaster> nexaMasterProvider;
+    private final NodeService nodeService;
 
-    public QueryManager(ObjectProvider<NexaMaster> nexaMasterProvider) {
-        this.nexaMasterProvider = nexaMasterProvider;
+    public QueryManager(NodeService nodeService) {
+        this.nodeService = nodeService;
     }
 
     public static long defaultTimeoutMs() {
         return DEFAULT_TIMEOUT_MS;
-    }
-
-    private NexaMaster nexaMaster() {
-        return nexaMasterProvider.getObject();
     }
 
     // ==================== 查询下发（同步等待） ====================
@@ -71,72 +58,87 @@ public class QueryManager {
                                                                   ContainerStatusRequest req,
                                                                   long timeoutMs) {
         Envelope envelope = ProtocolCodec.buildContainerStatusRequest(runnerId, req);
-        CompletableFuture<ContainerStatusResponse> future = new CompletableFuture<>();
-        CompletableFuture<ContainerStatusResponse> previous = pendingStatus.put(runnerId, future);
-        if (previous != null) {
-            // 同节点已有未回执查询，置为被取代，避免调用方悬挂
-            previous.completeExceptionally(new TimeoutException("查询被同一节点的新查询取代: runnerId=" + runnerId));
+        PendingQuery<ContainerStatusResponse> pending = nodeService.withRunnerLock(runnerId, () -> {
+            NodeService.SessionTarget target = nodeService.getCurrentTarget(runnerId).orElse(null);
+            if (target == null) return null;
+            PendingQuery<ContainerStatusResponse> next = new PendingQuery<>(target.generation(), new CompletableFuture<>());
+            PendingQuery<ContainerStatusResponse> previous = pendingStatus.put(runnerId, next);
+            if (previous != null) {
+                previous.future().completeExceptionally(new TimeoutException("查询被同一节点的新查询取代: runnerId=" + runnerId));
+            }
+            if (!target.send(envelope)) {
+                pendingStatus.remove(runnerId, next);
+                return null;
+            }
+            return next;
+        });
+        if (pending == null) {
+            log.warn("[Master] 状态查询下发失败，节点不可写: runnerId={}", runnerId);
+            return Optional.empty();
         }
-        return await(runnerId, envelope, future, timeoutMs, "状态查询");
+        return await(runnerId, envelope, pending, timeoutMs, "状态查询");
     }
 
     public Optional<ContainerLogsResponse> queryContainerLogs(String runnerId,
                                                               ContainerLogsRequest req,
                                                               long timeoutMs) {
         Envelope envelope = ProtocolCodec.buildContainerLogsRequest(runnerId, req);
-        CompletableFuture<ContainerLogsResponse> future = new CompletableFuture<>();
-        CompletableFuture<ContainerLogsResponse> previous = pendingLogs.put(runnerId, future);
-        if (previous != null) {
-            previous.completeExceptionally(new TimeoutException("查询被同一节点的新查询取代: runnerId=" + runnerId));
+        PendingQuery<ContainerLogsResponse> pending = nodeService.withRunnerLock(runnerId, () -> {
+            NodeService.SessionTarget target = nodeService.getCurrentTarget(runnerId).orElse(null);
+            if (target == null) return null;
+            PendingQuery<ContainerLogsResponse> next = new PendingQuery<>(target.generation(), new CompletableFuture<>());
+            PendingQuery<ContainerLogsResponse> previous = pendingLogs.put(runnerId, next);
+            if (previous != null) {
+                previous.future().completeExceptionally(new TimeoutException("查询被同一节点的新查询取代: runnerId=" + runnerId));
+            }
+            if (!target.send(envelope)) {
+                pendingLogs.remove(runnerId, next);
+                return null;
+            }
+            return next;
+        });
+        if (pending == null) {
+            log.warn("[Master] 日志查询下发失败，节点不可写: runnerId={}", runnerId);
+            return Optional.empty();
         }
-        return awaitLogs(runnerId, envelope, future, timeoutMs);
+        return awaitLogs(runnerId, envelope, pending, timeoutMs);
     }
 
     private Optional<ContainerStatusResponse> await(String runnerId, Envelope envelope,
-                                                    CompletableFuture<ContainerStatusResponse> future,
+                                                    PendingQuery<ContainerStatusResponse> pending,
                                                     long timeoutMs, String label) {
         String requestId = envelope.getRequestId();
-        boolean sent = nexaMaster().sendTo(runnerId, envelope);
-        if (!sent) {
-            pendingStatus.remove(runnerId, future);
-            log.warn("[Master] {}下发失败，节点不可写: runnerId={}", label, runnerId);
-            return Optional.empty();
-        }
+        CompletableFuture<ContainerStatusResponse> future = pending.future();
         log.debug("[Master] {}已下发: runnerId={}, requestId={}", label, runnerId, requestId);
         try {
             ContainerStatusResponse resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
             return Optional.of(resp);
         } catch (TimeoutException e) {
-            pendingStatus.remove(runnerId, future);
+            pendingStatus.remove(runnerId, pending);
             log.warn("[Master] {}超时（{}ms）: runnerId={}, requestId={}", label, timeoutMs, runnerId, requestId);
             return Optional.empty();
         } catch (Exception e) {
-            pendingStatus.remove(runnerId, future);
+            pendingStatus.remove(runnerId, pending);
             log.warn("[Master] {}异常: runnerId={}, requestId={}, err={}", label, runnerId, requestId, e.getMessage());
             return Optional.empty();
         }
     }
 
     private Optional<ContainerLogsResponse> awaitLogs(String runnerId, Envelope envelope,
-                                                      CompletableFuture<ContainerLogsResponse> future,
+                                                      PendingQuery<ContainerLogsResponse> pending,
                                                       long timeoutMs) {
         String requestId = envelope.getRequestId();
-        boolean sent = nexaMaster().sendTo(runnerId, envelope);
-        if (!sent) {
-            pendingLogs.remove(runnerId, future);
-            log.warn("[Master] 日志查询下发失败，节点不可写: runnerId={}", runnerId);
-            return Optional.empty();
-        }
+        CompletableFuture<ContainerLogsResponse> future = pending.future();
         log.debug("[Master] 日志查询已下发: runnerId={}, requestId={}", runnerId, requestId);
         try {
             ContainerLogsResponse resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
             return Optional.of(resp);
         } catch (TimeoutException e) {
-            pendingLogs.remove(runnerId, future);
+            pendingLogs.remove(runnerId, pending);
             log.warn("[Master] 日志查询超时（{}ms）: runnerId={}, requestId={}", timeoutMs, runnerId, requestId);
             return Optional.empty();
         } catch (Exception e) {
-            pendingLogs.remove(runnerId, future);
+            pendingLogs.remove(runnerId, pending);
             log.warn("[Master] 日志查询异常: runnerId={}, requestId={}, err={}", runnerId, requestId, e.getMessage());
             return Optional.empty();
         }
@@ -145,41 +147,60 @@ public class QueryManager {
     // ==================== 回执入口（由 FlowOpsMasterListener 调用） ====================
 
     public void onContainerStatus(RunnerSession session, ContainerStatusResponse resp) {
-        CompletableFuture<ContainerStatusResponse> future = pendingStatus.remove(session.getRunnerId());
-        if (future == null) {
+        PendingQuery<ContainerStatusResponse> pending = pendingStatus.remove(session.getRunnerId());
+        if (pending == null) {
             log.warn("[Master] 收到未知状态查询回执: runnerId={}, running={}", session.getRunnerId(), resp.getRunning());
             return;
         }
-        future.complete(resp);
+        pending.future().complete(resp);
     }
 
     public void onContainerLogs(RunnerSession session, ContainerLogsResponse resp) {
-        CompletableFuture<ContainerLogsResponse> future = pendingLogs.remove(session.getRunnerId());
-        if (future == null) {
+        PendingQuery<ContainerLogsResponse> pending = pendingLogs.remove(session.getRunnerId());
+        if (pending == null) {
             log.warn("[Master] 收到未知日志查询回执: runnerId={}", session.getRunnerId());
             return;
         }
-        future.complete(resp);
+        pending.future().complete(resp);
     }
 
     /**
-     * 节点掉线时，将该节点上所有进行中的查询置为失败
+     * 节点掉线时失败化进行中的查询。
+     *
+     * <p><b>按会话代次归因</b>：只失败化发起时所针对代次 == 事件所属代次 的查询，
+     * 避免在“读注册表 → 清理”窗口内注册的新会话的查询被误失败化。
+     *
+     * @param sessionGeneration 事件所属会话代次；&lt;= 0（身份未知）时不失败化任何查询，
+     *                          交由各查询自身的超时兜底
      */
-    public void failPendingForNode(String runnerId, String reason) {
-        if (runnerId == null) return;
+    public void failPendingForNode(String runnerId, long sessionGeneration, String reason) {
+        if (runnerId == null) {
+            return;
+        }
+        if (sessionGeneration <= 0) {
+            log.warn("[Master] 断开事件缺少会话代次，跳过查询失败化（交由查询超时兜底）: runnerId={}, reason={}",
+                    runnerId, reason);
+            return;
+        }
         int failed = 0;
-        CompletableFuture<ContainerStatusResponse> statusFuture = pendingStatus.remove(runnerId);
-        if (statusFuture != null) {
-            statusFuture.completeExceptionally(new IllegalStateException("节点掉线: " + reason));
+        PendingQuery<ContainerStatusResponse> status = pendingStatus.get(runnerId);
+        if (status != null && status.sessionGeneration() == sessionGeneration
+                && pendingStatus.remove(runnerId, status)) {
+            status.future().completeExceptionally(new IllegalStateException("节点掉线: " + reason));
             failed++;
         }
-        CompletableFuture<ContainerLogsResponse> logsFuture = pendingLogs.remove(runnerId);
-        if (logsFuture != null) {
-            logsFuture.completeExceptionally(new IllegalStateException("节点掉线: " + reason));
+        PendingQuery<ContainerLogsResponse> logs = pendingLogs.get(runnerId);
+        if (logs != null && logs.sessionGeneration() == sessionGeneration
+                && pendingLogs.remove(runnerId, logs)) {
+            logs.future().completeExceptionally(new IllegalStateException("节点掉线: " + reason));
             failed++;
         }
         if (failed > 0) {
-            log.warn("[Master] 节点 {} 掉线，已失败 {} 个进行中的查询", runnerId, failed);
+            log.warn("[Master] 节点 {} 掉线，已失败 {} 个进行中的查询 (generation={})", runnerId, failed, sessionGeneration);
         }
+    }
+
+    /** 进行中的查询：所针对的会话代次 + 等待中的 future */
+    private record PendingQuery<T>(long sessionGeneration, CompletableFuture<T> future) {
     }
 }

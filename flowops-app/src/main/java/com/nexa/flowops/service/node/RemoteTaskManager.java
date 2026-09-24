@@ -114,20 +114,37 @@ public class RemoteTaskManager {
     }
 
     /**
-     * 节点掉线时，将该节点上所有 pending 任务标记失败
+     * 节点掉线时失败化待处理任务。
+     *
+     * <p><b>按会话代次归因</b>：只失败化“下发时所针对会话代次 == 事件所属代次”的任务。
+     * 事件归属由 {@code FlowOpsMasterListener} 按协议会话注册表判定；即使协议在
+     * “读注册表 → 清理”之间完成新会话注册，接管者刚下发的任务（代次不同）也不会被误失败化。
+     *
+     * @param sessionGeneration 事件所属会话代次；&lt;= 0 表示身份未知（旧签名/未绑定），
+     *                          此时不失败化任何任务，交由 {@link #sweepTimeouts()} 兜底
      */
-    public void failTasksForNode(String nodeId, String reason) {
-        if (nodeId == null) return;
+    public void failTasksForNode(String nodeId, long sessionGeneration, String reason) {
+        if (nodeId == null) {
+            return;
+        }
+        if (sessionGeneration <= 0) {
+            log.warn("[Master] 断开事件缺少会话代次，跳过任务失败化（交由超时清扫兜底）: nodeId={}, reason={}",
+                    nodeId, reason);
+            return;
+        }
         int failed = 0;
         for (Map.Entry<String, PendingTask> entry : pendingTasks.entrySet()) {
             PendingTask task = entry.getValue();
-            if (nodeId.equals(task.nodeId()) && pendingTasks.remove(entry.getKey(), task)) {
+            if (nodeId.equals(task.nodeId())
+                    && task.sessionGeneration() == sessionGeneration
+                    && pendingTasks.remove(entry.getKey(), task)) {
                 failTask(task, "节点掉线: " + reason);
                 failed++;
             }
         }
         if (failed > 0) {
-            log.warn("[Master] 节点 {} 掉线，已标记 {} 个 pending 任务为失败", nodeId, failed);
+            log.warn("[Master] 节点 {} 掉线，已标记 {} 个 pending 任务为失败 (generation={})",
+                    nodeId, failed, sessionGeneration);
         }
     }
 

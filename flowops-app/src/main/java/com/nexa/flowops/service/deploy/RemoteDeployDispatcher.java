@@ -14,7 +14,6 @@ import com.nexa.flowops.service.node.RemoteTaskManager;
 import com.nexa.protocol.EnvelopeOuterClass.Envelope;
 import com.nexa.protocol.Task.TaskRequest;
 import com.nexa.protocol.codec.ProtocolCodec;
-import com.nexa.protocol.master.NexaMaster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,22 +41,19 @@ public class RemoteDeployDispatcher {
     private final ConfigGeneratorChain configGeneratorChain;
     private final NodeService nodeService;
     private final RemoteTaskManager remoteTaskManager;
-    private final NexaMaster nexaMaster;
 
     public RemoteDeployDispatcher(DeployServiceMapper serviceMapper,
                                   DeployRecordMapper recordMapper,
                                   ObjectMapper objectMapper,
                                   ConfigGeneratorChain configGeneratorChain,
                                   NodeService nodeService,
-                                  RemoteTaskManager remoteTaskManager,
-                                  NexaMaster nexaMaster) {
+                                  RemoteTaskManager remoteTaskManager) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.objectMapper = objectMapper;
         this.configGeneratorChain = configGeneratorChain;
         this.nodeService = nodeService;
         this.remoteTaskManager = remoteTaskManager;
-        this.nexaMaster = nexaMaster;
     }
 
     /**
@@ -100,22 +96,25 @@ public class RemoteDeployDispatcher {
             Envelope envelope = ProtocolCodec.buildTaskDispatchRequest(nodeId, req);
 
             log.info("[{}] 远程任务下发: taskId={}, nodeId={}, action={}", service.getName(), taskId, nodeId, action);
-            boolean sent = nexaMaster.sendTo(nodeId, envelope);
-            if (!sent) {
-                log.warn("[{}] 远程任务下发失败，目标节点不可写: nodeId={}", service.getName(), nodeId);
-                return failDispatch(record, service, "下发失败：目标节点不在线: " + nodeId);
-            }
+            return nodeService.withRunnerLock(nodeId, () -> {
+                NodeService.SessionTarget target = nodeService.getCurrentTarget(nodeId).orElse(null);
+                if (target == null || !target.send(envelope)) {
+                    log.warn("[{}] 远程任务下发失败，目标节点不可写: nodeId={}", service.getName(), nodeId);
+                    return failDispatch(record, service, "下发失败：目标节点不在线: " + nodeId);
+                }
 
-            record.setNodeId(nodeId);
-            record.setStatus("pending");
-            record.setRemark("任务已下发至节点: " + nodeId);
-            recordMapper.insert(record);
+                record.setNodeId(nodeId);
+                record.setStatus("pending");
+                record.setRemark("任务已下发至节点: " + nodeId);
+                recordMapper.insert(record);
 
-            remoteTaskManager.register(new PendingTask(taskId, service.getId(), nodeId, action,
-                    record.getLogPath(), record.getId(), successStatus,
-                    System.currentTimeMillis(), RemoteTaskManager.defaultTimeoutMs()));
+                // 发送与登记使用同一个会话目标；断开清理须等登记完成。
+                remoteTaskManager.register(new PendingTask(taskId, service.getId(), nodeId, action,
+                        record.getLogPath(), record.getId(), successStatus, target.generation(),
+                        System.currentTimeMillis(), RemoteTaskManager.defaultTimeoutMs()));
 
-            return Result.ok("任务已下发至节点: " + nodeId);
+                return Result.ok("任务已下发至节点: " + nodeId);
+            });
         } catch (Exception e) {
             log.error("[{}] 远程任务下发异常: action={}, nodeId={}", service.getName(), action, nodeId, e);
             return failDispatch(record, service, "远程任务下发异常: " + e.getMessage());

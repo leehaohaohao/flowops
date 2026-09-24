@@ -1,6 +1,7 @@
 package com.nexa.flowops.service.node;
 
 import com.nexa.flowops.dto.NodeInfoVO;
+import com.nexa.protocol.EnvelopeOuterClass.Envelope;
 import com.nexa.protocol.master.NexaMaster;
 import com.nexa.protocol.master.RunnerSession;
 import org.springframework.beans.factory.ObjectProvider;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 @Service
 public class NodeService {
@@ -22,12 +24,14 @@ public class NodeService {
      * FlowOpsMasterListener → NodeService → NexaMaster → FlowOpsMasterListener
      */
     private final ObjectProvider<NexaMaster> nexaMasterProvider;
+    private final SessionTracker sessionTracker;
 
     /** runnerId -> 最近一次心跳上报的负载 */
     private final Map<String, NodeLoad> loads = new ConcurrentHashMap<>();
 
-    public NodeService(ObjectProvider<NexaMaster> nexaMasterProvider) {
+    public NodeService(ObjectProvider<NexaMaster> nexaMasterProvider, SessionTracker sessionTracker) {
         this.nexaMasterProvider = nexaMasterProvider;
+        this.sessionTracker = sessionTracker;
     }
 
     private NexaMaster nexaMaster() {
@@ -77,6 +81,23 @@ public class NodeService {
             return Optional.empty();
         }
         return nexaMaster().getSessionManager().get(runnerId);
+    }
+
+    /** 只读取一次注册表，使发送连接与工作归属取自同一个会话。 */
+    public Optional<SessionTarget> getCurrentTarget(String runnerId) {
+        return getSession(runnerId)
+                .map(session -> new SessionTarget(session, sessionTracker.generationOf(session)));
+    }
+
+    /** 工作登记与断开清理共用按节点锁。协议注册表写入仍可并发，故还需按会话归因。 */
+    public <T> T withRunnerLock(String runnerId, Supplier<T> action) {
+        return sessionTracker.withRunnerLock(runnerId, action);
+    }
+
+    public record SessionTarget(RunnerSession session, long generation) {
+        public boolean send(Envelope envelope) {
+            return session.send(envelope);
+        }
     }
 
     /**
