@@ -79,6 +79,28 @@ public class DefaultDockerClient implements DockerClient {
         return startStreaming(workDir, cmd.toArray(new String[0]));
     }
 
+    // ==================== Docker 网络 ====================
+
+    @Override
+    public DockerResult inspectNetwork(String name) {
+        return executeRaw(DockerCommandBuilder.networkInspect(name).toArray(new String[0]));
+    }
+
+    @Override
+    public DockerResult createNetwork(String name) {
+        return executeRaw(DockerCommandBuilder.networkCreateBridge(name).toArray(new String[0]));
+    }
+
+    @Override
+    public DockerResult removeNetwork(String name) {
+        return executeRaw(DockerCommandBuilder.networkRemove(name).toArray(new String[0]));
+    }
+
+    @Override
+    public DockerResult listNetworks() {
+        return executeRaw(DockerCommandBuilder.networkList().toArray(new String[0]));
+    }
+
     // ==================== 内部实现 ====================
 
     private List<String> buildLogsCommand(LogsOptions options) {

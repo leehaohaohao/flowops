@@ -7,6 +7,9 @@ import com.nexa.flowops.dto.UpdateServiceRequest;
 import com.nexa.flowops.entity.DeployService;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import com.nexa.flowops.service.artifact.ArtifactRegistry;
+import com.nexa.flowops.service.network.DockerNetworkService;
+import com.nexa.flowops.service.network.NetworkAuthorizationService;
+import com.nexa.flowops.service.network.NetworkException;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -20,11 +23,18 @@ public class ServiceMgmtService {
 
     private final DeployServiceMapper serviceMapper;
     private final ArtifactRegistry artifactRegistry;
+    private final DockerNetworkService networkService;
+    private final NetworkAuthorizationService networkAuthorizationService;
     private final String storagePath = "/data/flowops/services";
 
-    public ServiceMgmtService(DeployServiceMapper serviceMapper, ArtifactRegistry artifactRegistry) {
+    public ServiceMgmtService(DeployServiceMapper serviceMapper,
+                              ArtifactRegistry artifactRegistry,
+                              DockerNetworkService networkService,
+                              NetworkAuthorizationService networkAuthorizationService) {
         this.serviceMapper = serviceMapper;
         this.artifactRegistry = artifactRegistry;
+        this.networkService = networkService;
+        this.networkAuthorizationService = networkAuthorizationService;
     }
 
     public List<DeployService> list() {
@@ -59,6 +69,8 @@ public class ServiceMgmtService {
         service.setServiceConfig(req.getServiceConfig());
         service.setProjectId(req.getProjectId());
         service.setNodeId(req.getNodeId());
+        validateNetworkSelection(req.getProjectId(), req.getNodeId(), req.getNetworkId());
+        service.setNetworkId(req.getNetworkId());
         service.setVolumeDir(storagePath + "/" + req.getDeployName());
         service.setStatus("stopped");
         serviceMapper.insert(service);
@@ -109,7 +121,30 @@ public class ServiceMgmtService {
         if (req.getNodeId() != null) {
             service.setNodeId(req.getNodeId());
         }
+        // 接口契约：networkId 为 number|null，null 即表示不加入共享网络（此处按提交值生效）
+        validateNetworkSelection(service.getProjectId(), service.getNodeId(), req.getNetworkId());
+        service.setNetworkId(req.getNetworkId());
         serviceMapper.updateById(service);
+    }
+
+    /**
+     * 共享网络选择校验（B4）：选网络时目标节点必须是本机，网络必须已登记且已授权给该服务所属项目。
+     * 未选网络（null）时不做任何限制，旧服务行为不变。
+     */
+    private void validateNetworkSelection(Long projectId, String nodeId, Long networkId) {
+        if (networkId == null) {
+            return;
+        }
+        if (nodeId != null && !nodeId.isBlank()) {
+            throw NetworkException.invalid("选择共享网络时目标节点必须是本机，runner/auto 与共享网络互斥");
+        }
+        if (projectId == null) {
+            throw NetworkException.invalid("服务缺少所属项目，无法校验网络授权");
+        }
+        networkService.requireRegistered(networkId);
+        if (!networkAuthorizationService.isGranted(projectId, networkId)) {
+            throw NetworkException.forbidden("该项目未获授权使用该网络");
+        }
     }
 
     private void validateDeployName(String deployName) {

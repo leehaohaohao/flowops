@@ -40,6 +40,20 @@ public interface DockerClient {
     /** 流式启动 compose logs --follow，返回 Process 供调用方逐行读取 */
     Process composeLogsFollow(File workDir, LogsOptions options);
 
+    // ==================== Docker 网络（仅主节点本机操作） ====================
+
+    /** docker network inspect --format {{json .}} <name>；网络不存在时 isSuccess() 为 false */
+    DockerResult inspectNetwork(String name);
+
+    /** docker network create --driver bridge <name>；只创建默认地址分配的用户自定义 bridge */
+    DockerResult createNetwork(String name);
+
+    /** docker network rm <name> */
+    DockerResult removeNetwork(String name);
+
+    /** docker network ls --format {{json .}}；每行一个 JSON，调用方负责过滤 driver 与内置网络 */
+    DockerResult listNetworks();
+
     // ==================== 日志选项 ====================
 
     record LogsOptions(int tail, String since, String until, boolean timestamps, String service) {

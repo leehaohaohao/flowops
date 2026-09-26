@@ -4,7 +4,11 @@ import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.dto.ContainerStatusVO;
 import com.nexa.flowops.entity.DeployRecord;
 import com.nexa.flowops.entity.DeployService;
+import com.nexa.flowops.entity.DockerNetwork;
 import com.nexa.flowops.mapper.DeployServiceMapper;
+import com.nexa.flowops.service.network.DockerNetworkService;
+import com.nexa.flowops.service.network.NetworkAuthorizationService;
+import com.nexa.flowops.service.network.NetworkException;
 import com.nexa.flowops.service.node.NodeService;
 import com.nexa.flowops.service.node.QueryManager;
 import com.nexa.protocol.Query.ContainerStatusRequest;
@@ -35,6 +39,8 @@ public class DeployExecutorService {
     private final DeployLogHelper logHelper;
     private final NodeService nodeService;
     private final QueryManager queryManager;
+    private final DockerNetworkService networkService;
+    private final NetworkAuthorizationService networkAuthorizationService;
 
     public DeployExecutorService(DeployServiceMapper serviceMapper,
                                  UploadHelper uploadHelper,
@@ -42,7 +48,9 @@ public class DeployExecutorService {
                                  RemoteDeployDispatcher remoteDispatcher,
                                  DeployLogHelper logHelper,
                                  NodeService nodeService,
-                                 QueryManager queryManager) {
+                                 QueryManager queryManager,
+                                 DockerNetworkService networkService,
+                                 NetworkAuthorizationService networkAuthorizationService) {
         this.serviceMapper = serviceMapper;
         this.uploadHelper = uploadHelper;
         this.localRunner = localRunner;
@@ -50,6 +58,8 @@ public class DeployExecutorService {
         this.logHelper = logHelper;
         this.nodeService = nodeService;
         this.queryManager = queryManager;
+        this.networkService = networkService;
+        this.networkAuthorizationService = networkAuthorizationService;
     }
 
     // ==================== 上传辅助 ====================
@@ -77,12 +87,43 @@ public class DeployExecutorService {
         if (service == null) {
             return Result.fail("服务不存在: " + serviceId);
         }
+        Result<Void> networkCheck = validateNetworkForDeploy(service);
+        if (networkCheck != null) {
+            return networkCheck;
+        }
         DeployRecord record = newDeployRecord(service);
         String nodeId = remoteDispatcher.resolveTargetNode(service);
         if (nodeId != null) {
             return remoteDispatcher.dispatch(service, nodeId, "START", "running", record);
         }
         return localRunner.runStart(service, record);
+    }
+
+    /**
+     * 部署前共享网络校验（B4）：选网络的服务必须本机执行，网络已登记且在主节点 Docker 中存在，
+     * 且项目仍获授权。未选网络的服务不受影响，调度行为不变。
+     */
+    private Result<Void> validateNetworkForDeploy(DeployService service) {
+        if (service.getNetworkId() == null) {
+            return null;
+        }
+        try {
+            String nodeId = service.getNodeId();
+            if (nodeId != null && !nodeId.isBlank()) {
+                throw NetworkException.invalid("选择共享网络时目标节点必须是本机，runner/auto 与共享网络互斥");
+            }
+            DockerNetwork network = networkService.requireRegistered(service.getNetworkId());
+            if (!networkService.inspect(network).present()) {
+                throw NetworkException.dockerMissing("共享网络在主节点 Docker 中不存在: " + network.getName());
+            }
+            if (!networkAuthorizationService.isGranted(service.getProjectId(), service.getNetworkId())) {
+                throw NetworkException.forbidden("该项目未获授权使用该网络");
+            }
+            return null;
+        } catch (NetworkException e) {
+            log.warn("[{}] 部署前网络校验未通过: {}", service.getName(), e.getMessage());
+            return Result.fail(e.getCode(), e.getMessage());
+        }
     }
 
     // ==================== 容器操作 ====================

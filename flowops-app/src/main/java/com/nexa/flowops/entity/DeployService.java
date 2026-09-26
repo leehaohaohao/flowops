@@ -19,6 +19,7 @@ public class DeployService {
     private String serviceConfig;  // 结构化配置 JSON
     private String status;         // running, stopped
     private String nodeId;         // 目标执行节点 runnerId；null/空=本机，auto=自动调度
+    private Long networkId;        // 共享网络ID；null=不加入共享网络（旧服务为 null）
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

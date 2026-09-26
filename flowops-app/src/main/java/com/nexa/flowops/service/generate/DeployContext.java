@@ -29,6 +29,13 @@ public class DeployContext {
     private String customNginx;
     private int nginxListenPort;
 
+    /**
+     * 共享网络（external）的 Docker 网络名；null 表示不加入共享网络。
+     * 只有本机部署且服务选择了已授权网络时由调用方（LocalDeployRunner）填充，
+     * 旧服务与远程部署保持 null，Compose 输出与既有行为一致。
+     */
+    private String sharedNetworkName;
+
     public static DeployContext from(DeployService service, ObjectMapper objectMapper) {
         DeployContext ctx = new DeployContext();
         ctx.service = service;

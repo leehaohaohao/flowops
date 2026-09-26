@@ -8,6 +8,7 @@ import com.nexa.flowops.mapper.DeployRecordMapper;
 import com.nexa.flowops.mapper.DeployServiceMapper;
 import com.nexa.flowops.service.generate.ConfigGeneratorChain;
 import com.nexa.flowops.service.generate.DeployContext;
+import com.nexa.flowops.service.network.DockerNetworkService;
 import com.nexa.flowops.docker.DockerClient;
 import com.nexa.flowops.docker.DockerResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,19 +33,22 @@ public class LocalDeployRunner {
     private final ObjectMapper objectMapper;
     private final ConfigGeneratorChain configGeneratorChain;
     private final DeployLogHelper logHelper;
+    private final DockerNetworkService networkService;
 
     public LocalDeployRunner(DeployServiceMapper serviceMapper,
                              DeployRecordMapper recordMapper,
                              DockerClient dockerClient,
                              ObjectMapper objectMapper,
                              ConfigGeneratorChain configGeneratorChain,
-                             DeployLogHelper logHelper) {
+                             DeployLogHelper logHelper,
+                             DockerNetworkService networkService) {
         this.serviceMapper = serviceMapper;
         this.recordMapper = recordMapper;
         this.dockerClient = dockerClient;
         this.objectMapper = objectMapper;
         this.configGeneratorChain = configGeneratorChain;
         this.logHelper = logHelper;
+        this.networkService = networkService;
     }
 
     public Result<Void> runStart(DeployService service, DeployRecord record) {
@@ -52,6 +56,7 @@ public class LocalDeployRunner {
         try {
             // 构建上下文并生成配置文件
             DeployContext context = DeployContext.from(service, objectMapper);
+            applySharedNetwork(service, context);
             configGeneratorChain.generate(context);
 
             String volumeDir = service.getVolumeDir();
@@ -168,8 +173,18 @@ public class LocalDeployRunner {
         }
     }
 
-    public ContainerStatusVO getStatus(DeployService service) {
-        // 注：远程节点的容器状态需通过子节点上报获取，当前仅支持本机容器状态
+    /**
+     * 服务选择了共享网络时，把 Docker 网络名写入上下文，Compose 生成器据此输出
+     * 私有 default + external shared 双网络与唯一别名；未选网络时上下文保持 null，输出与旧服务一致。
+     */
+    private void applySharedNetwork(DeployService service, DeployContext context) {
+        if (service.getNetworkId() == null) {
+            return;
+        }
+        context.setSharedNetworkName(networkService.requireRegistered(service.getNetworkId()).getName());
+    }
+
+    public ContainerStatusVO getStatus(DeployService service) {        // 注：远程节点的容器状态需通过子节点上报获取，当前仅支持本机容器状态
         boolean running = dockerClient.isContainerRunning(service.getName());
         ContainerStatusVO vo = new ContainerStatusVO();
         vo.setRunning(running);
