@@ -1,9 +1,19 @@
 # FlowOps 文档索引
 
+## 参考
+
+与实现同步维护的规范类文档（非计划，随代码更新）。
+
+| 文档 | 说明 |
+|------|------|
+| [configuration-loading-order.md](configuration-loading-order.md) | 配置加载顺序（单一解析链）：命令行参数 > -D 系统属性 > 环境变量 > `.env.<profile>` > `application-<profile>.yml` > `application.yml`，逐变量降级 |
+| [frontend-api/](frontend-api/) | 前端对接接口文档 |
+
 ## 进行中
 
 | 日期 | 文档 | 说明 |
 |------|------|------|
+| 2026-09-26 | [node-scoped-docker-network-design-plan.md](2026-09-26-node-scoped-docker-network-design-plan.md) | 主节点 Docker 网络管理、项目接入与 Go 配置缺陷修复：分项目开发顺序表（待实施） |
 | 2026-06-15 | [container-log-enhancement-plan.md](2026-06-15-container-log-enhancement-plan.md) | 容器日志查询增强：since/until/timestamps/grep（待实现） |
 | 2026-06-03 | [log-system-implementation-plan.md](2026-06-03-log-system-implementation-plan.md) | 日志系统重构实施计划（待实现） |
 

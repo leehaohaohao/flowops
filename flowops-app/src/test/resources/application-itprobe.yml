@@ -1,0 +1,4 @@
+# 供 DotenvLoadingOrderTest 使用的 profile 专属配置：与 .env.itprobe 的同名键用于验证"dotenv 覆盖 yml"
+from:
+  dotenv: yml-value
+  yml: yml-value
