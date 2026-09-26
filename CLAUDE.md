@@ -35,7 +35,7 @@ FlowOps is a self-hosted CI/CD deployment platform. Multi-module Maven project (
 - **Auth**: Sa-Token with JWT stateless mode. Excluded paths: `/auth/**`, static assets, `/error`. Permission enforced via `PermissionAspect` (AOP) + `PermissionInterceptor` (URL patterns).
 - **Cross-module SPI**: Permission module defines `ExternalDataProvider` interface; app module provides `FlowOpsExternalDataProvider` implementation. No compile-time dependency from permission → app.
 - **Log system**: `LogSource` SPI with `LocalDockerLogSource` implementation. Logs stored at `{app.logs.path}/{projectId}/{serviceId}/{type}/{date}/`. WebSocket endpoints: `/ws/logs` (file tailing, 2s polling) and `/ws/container-logs` (live `docker compose logs --follow`).
-- **dotenv-java**: `DotenvPostProcessor` loads `.env.{profile}` into Spring Environment before YAML parsing. Priority: system env vars > dotenv > yml.
+- **配置加载顺序**: 单一解析链，高 → 低：命令行参数 > `-D` 系统属性 > 进程环境变量（`docker run -e` / `--env-file`）> `.env.<profile>`（缺失降级 `.env`）> `application-<profile>.yml` > `application.yml` 与代码默认值。**逐变量降级**：每个键独立沿链查找，命中即止，上层没有就自动落下一层。唯一 loader 是 `DotenvPostProcessor`（order `HIGHEST_PRECEDENCE + 5`、`addLast`），它自行解析 profile（`--spring.profiles.active` → `-Dspring.profiles.active` → `SPRING_PROFILES_ACTIVE` → `prod`），因为该 order 下 `environment.getActiveProfiles()` 在 Spring Boot 3.3 里仍为空。禁止在 `main` 里用 `System.setProperty` 注入 dotenv 值：系统属性高于环境变量，会让挂载的 `.env.<profile>` 反向盖掉 `-e`。详见 `docs/configuration-loading-order.md`。启动时会打印"配置来源表"（键 / 定义来源 / 占位符填充来源 / 生效值，`ConfigSourceReporter`）：敏感项（`spring.datasource.password`、`sa-token.jwt-secret-key`）只显示来源不显示值，必填占位符未注入会直接标出缺口；`flowops.config-report.enabled=false` 可关闭。
 
 ### REST API Routes
 
@@ -68,7 +68,12 @@ Environment secrets via `.env` files: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `J
 Deploy script: `deploy-prod.sh <jar> [profile] [env-file]`
 - `./deploy-prod.sh app.jar` — prod profile, `.env.prod`
 - `./deploy-prod.sh app.jar local .env.local` — local profile, `.env.local`
-- Uses `--env-file` for Docker env vars + `-v` mount for DotenvPostProcessor file reading
-- Container exposes port 8080, mapped to host port 8880 by default
+- Uses `--env-file` for Docker env vars + `-v` mount of the same file to `/app/<name>` for the app's dotenv loading
+- Container exposes port 8080, mapped to host port 8880 by default (`PORT` 可覆盖)
+- **主从通信**：脚本同时发布 Nexa Protocol Master 端口（容器与宿主机默认均为 8081，与 `application.yml` 一致；
+  `NEXA_MASTER_PORT` 覆盖容器内监听端口、`NEXA_PORT` 覆盖宿主机发布端口），
+  并让容器内监听 `NEXA_MASTER_HOST=0.0.0.0`（shell 变量可覆盖），供其他机器上的子节点连接；
+  子节点接入前需放通该端口并用超管录入节点令牌（`POST /api/nodes/registry`）
+- 这三个键由脚本 `-e` 注入，优先级高于 `.env.<profile>` 文件，因此无需写进 env 文件；临时改端口用 shell 变量（`PORT` / `NEXA_PORT` / `NEXA_MASTER_PORT`）覆盖
 
 Artifact storage: `/data/flowops/services/{deployName}/` — JARs, dist dirs, generated docker-compose.yml
