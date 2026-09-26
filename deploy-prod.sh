@@ -7,11 +7,24 @@ set -e
 #  示例: bash deploy-prod.sh flowops-app-1.1.0.jar
 #         bash deploy-prod.sh app.jar prod .env.prod
 #         bash deploy-prod.sh app.jar local .env.local
+#
+#  端口：
+#    PORT             控制台 HTTP 宿主机端口，默认 8880 → 容器 8080
+#    NEXA_PORT        主从通信宿主机发布端口，默认同 NEXA_MASTER_PORT
+#    NEXA_MASTER_PORT 容器内监听端口，默认 8081（与 application.yml 一致），映射为 NEXA_PORT:NEXA_MASTER_PORT
+#  容器内监听地址由 NEXA_MASTER_HOST 决定，脚本默认 0.0.0.0，
+#  以便其他机器上的子节点连接；实际暴露范围由上面的端口映射与防火墙决定。
+#  注意：这三个键都由本脚本用 -e 注入（优先级高于 env 文件），无需重复写进 env 文件。
+#  示例: PORT=8880 NEXA_PORT=8081 bash deploy-prod.sh app.jar prod .env.prod
 # ==========================================
 
 IMAGE_NAME="flowops"
 CONTAINER_NAME="flowops"
 PORT="${PORT:-8880}"
+# 主节点与子节点通信（Nexa Protocol Master）
+NEXA_MASTER_HOST="${NEXA_MASTER_HOST:-0.0.0.0}"
+NEXA_MASTER_PORT="${NEXA_MASTER_PORT:-8081}"
+NEXA_PORT="${NEXA_PORT:-$NEXA_MASTER_PORT}"
 DATA_DIR="/data/flowops"
 APP_DIR="/app/flowops"
 PROFILE="${2:-prod}"
@@ -86,11 +99,20 @@ docker build -f Dockerfile -t "$IMAGE_NAME:latest" .
 
 # 启动容器
 echo "[3/4] 启动容器（profile: $PROFILE）..."
+# 配置来源（实测优先级 高 → 低，完整说明见 docs/configuration-loading-order.md）：
+#   命令行参数  >  JVM 系统属性  >  -e / --env-file 环境变量  >  .env.<profile> 文件  >  application-<profile>.yml  >  application.yml
+# 每个键独立沿该链查找，命中即止。--env-file 与本脚本的 -e 都落在第 3 层，
+# 同一键两处都写时以 -e 为准（docker 规则），因此 NEXA_MASTER_HOST / NEXA_MASTER_PORT /
+# SPRING_PROFILES_ACTIVE 由本脚本 -e 注入即可，无需重复写进 env 文件。
+# 容器内的 profile 由 SPRING_PROFILES_ACTIVE 决定，应用据此加载挂载的 .env.<profile>。
 docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     -p "$PORT:8080" \
+    -p "$NEXA_PORT:$NEXA_MASTER_PORT" \
     -e "SPRING_PROFILES_ACTIVE=$PROFILE" \
+    -e "NEXA_MASTER_HOST=$NEXA_MASTER_HOST" \
+    -e "NEXA_MASTER_PORT=$NEXA_MASTER_PORT" \
     --env-file "$ENV_FILE" \
     -v "$ENV_FILE:/app/$ENV_NAME:ro" \
     -v /var/run/docker.sock:/var/run/docker.sock \
@@ -106,8 +128,15 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     echo ""
     echo "=========================================="
     echo "  部署成功!"
-    echo "  访问地址: http://$SERVER_IP:$PORT/login"
-    echo "  默认账号: admin / admin123"
+    echo "  控制台:     http://$SERVER_IP:$PORT/login"
+    echo "  子节点通信: $SERVER_IP:$NEXA_PORT (Nexa Protocol Master)"
+    echo "  默认账号:   admin / admin123"
+    echo "------------------------------------------"
+    echo "  子节点接入前请确认："
+    echo "   1) 防火墙/安全组已放通 $NEXA_PORT（容器内监听 $NEXA_MASTER_HOST:$NEXA_MASTER_PORT）"
+    echo "   2) 已用超级管理员录入节点令牌：POST /api/nodes/registry"
+    echo "      body: {\"runnerId\":\"runner-1\",\"nodeName\":\"节点1\",\"token\":\"<与子节点一致>\"}"
+    echo "   3) 子节点配置同一 token 指向 $SERVER_IP:$NEXA_PORT"
     echo "=========================================="
 else
     echo ""

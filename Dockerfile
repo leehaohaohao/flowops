@@ -19,7 +19,9 @@ RUN mkdir -p /data/flowops/services /data/flowops/logs
 # 复制 Spring Boot fat JAR（由 deploy-prod.sh 重命名为 app.jar）
 COPY app.jar app.jar
 
-EXPOSE 8080
+EXPOSE 8080 8081
+# 8080：HTTP API / 前端静态资源（默认映射到宿主机 8880）
+# 8081：Nexa Protocol Master，主节点与子节点通信（需映射到宿主机并对子节点放通）
 
 # 默认 prod，可通过 docker run -e SPRING_PROFILES_ACTIVE=dev 覆盖
 ENTRYPOINT exec java -jar app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}
