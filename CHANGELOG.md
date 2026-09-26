@@ -8,6 +8,38 @@
 
 ---
 
+## 2.6.0 (2026-09-26)
+
+### 新功能
+
+- **节点级 Docker 网络管理**：新增 `docker_network` / `network_project_grant` / `project_default_network` 表与迁移
+  （`V3_1_2__create_docker_network.sql`、`V3_1_3__add_service_network_id.sql`）；支持在主节点登记（managed 创建 /
+  imported 导入）用户自定义 `bridge` 网络、按项目授权、设置项目默认网络，服务通过 `deploy_service.network_id` 接入；
+  Compose 生成改为 `default` + 外部 `shared` 双网络并加唯一别名，部署前校验节点、项目授权与网络存在
+  （`DockerNetworkService`、`NetworkAuthorizationService`、`NetworkController`，Docker 命令白名单化于 `DockerCommandBuilder`）。
+  真实 Docker 操作与真实 HTTP/DB 集成尚未验证，仅有单元测试覆盖
+- **启动配置来源表**：启动时打印每个关键配置项的「定义来源 / 占位符填充来源 / 生效值」，一眼看出参数是从
+  命令行、`-e` 环境变量、`.env.<profile>` 还是 `application*.yml` 生效的；敏感项（数据库口令、`JWT_SECRET`）
+  只显示来源不显示值，必填占位符未注入时直接标出缺口（`ConfigSourceReporter` / `ConfigSourceReportListener`，
+  可用 `flowops.config-report.enabled=false` 关闭）
+
+### 优化
+
+- **部署开放主从通信端口**：`deploy-prod.sh` 增加 Nexa Protocol Master 端口映射（容器 `8081` → 宿主机 `8081`；
+  `NEXA_PORT` 覆盖宿主机发布端口，`NEXA_MASTER_PORT` 覆盖容器内监听端口），并通过 `-e` 在容器内设置
+  `NEXA_MASTER_HOST=0.0.0.0` 以便其他机器上的子节点连接；`Dockerfile` 的 `EXPOSE` 同步为 `8080 8081`，
+  `nexa.master.port` 默认值与脚本对齐为 `8081`，部署成功提示补充放通端口与录入节点令牌的步骤
+- 新增 `docs/configuration-loading-order.md`：配置来源的权威说明（解析链、逐变量降级、容器内实际来源、启动来源表与验证方法）
+
+### 修复
+
+- **统一配置加载链**：dotenv 改由唯一的 `DotenvPostProcessor` 作为属性源加载（`addLast`）并自行解析 profile
+  （`--spring.profiles.active` → `-Dspring.profiles.active` → `SPRING_PROFILES_ACTIVE` → `prod`）。此前
+  `FlowopsApplication.main` 会把 `.env.<profile>` 写成 JVM 系统属性，优先级高于 `-e`，导致挂载的 env 文件反向覆盖
+  部署脚本注入的 `NEXA_MASTER_HOST` / `NEXA_MASTER_PORT`；以程序参数传 profile 时也会被忽略、始终退回加载 `.env.prod`。
+  现解析顺序为命令行参数 > `-D` 系统属性 > 环境变量（`-e` / `--env-file`）> `.env.<profile>` > `application-<profile>.yml`
+  > `application.yml`，逐变量降级，详见 `docs/configuration-loading-order.md`（回归测试 `DotenvLoadingOrderTest`）
+
 ## 2.5.0 (2026-09-24)
 
 ### 新功能
