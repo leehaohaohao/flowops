@@ -14,6 +14,10 @@ Guidance for agents working in this repository. Check code and tests before trea
 
 On Windows use `mvnw.cmd` in place of `./mvnw`; in PowerShell, quote `'-Dsurefire.failIfNoSpecifiedTests=false'`. `FlowopsApplicationTests` requires application/database configuration; `ArtifactTransferLinkTest` starts an in-process protocol master with mocked mappers and does not require a real Go runner or MySQL.
 
+## Plan documents and task boundaries
+
+For new or substantially revised implementation plans in `docs/`, make a development-order table the main structure. Each row must identify one repository, the concrete task, prerequisite rows, permitted files/modules, deliverable, verification, and explicit out-of-scope work. Use absolute repository paths in the plan's ownership table when work spans repositories. Separate cross-repository contracts from repository-local implementation tasks, and state who finalizes each contract before dependent work starts. Mark later phases and unverified behavior clearly; do not describe a plan as completed based on its date. An agent assigned one row may edit only that row's repository and permitted scope, must not implement another row or a deferred phase, and must report any required cross-boundary change to the coordinator for replanning. The coordinator performs final integration review against the table and current code/tests.
+
 Related repositories:
 
 - Frontend: `D:\project\front\flowops-front` (React, TypeScript, Vite, Ant Design). `npm run dev` proxies `/auth`, `/api`, and `/ws` to the backend; `npm run build` and `npm run build:vm` use different environment modes. Check `vite.config.ts` and `.env.*` before assuming the build output path.
