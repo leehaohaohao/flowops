@@ -76,6 +76,24 @@
 			<artifactId>commons-compress</artifactId>
 			<version>1.26.1</version>
 		</dependency>
+		<!-- 主节点到子节点宿主机的 SSH 连接验证：客户端 + SFTP 通道（测试用内嵌服务器也来自同一套）
+		     版本在 flowops-app 内声明，未走父 pom 的 dependencyManagement -->
+		<dependency>
+			<groupId>org.apache.sshd</groupId>
+			<artifactId>sshd-core</artifactId>
+			<version>2.19.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.sshd</groupId>
+			<artifactId>sshd-sftp</artifactId>
+			<version>2.19.0</version>
+		</dependency>
+		<!-- Ed25519 私钥支持：sshd 自身不含 EdDSA 提供者，缺它时 ssh-keygen -t ed25519 生成的密钥无法使用 -->
+		<dependency>
+			<groupId>net.i2p.crypto</groupId>
+			<artifactId>eddsa</artifactId>
+			<version>0.3.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

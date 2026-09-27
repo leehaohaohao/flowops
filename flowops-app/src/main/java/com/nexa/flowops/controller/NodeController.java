@@ -1,6 +1,5 @@
 package com.nexa.flowops.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.nexa.flowops.common.base.Result;
 import com.nexa.flowops.common.util.DigestUtil;
 import com.nexa.flowops.dto.NexaNodeVO;
@@ -8,8 +7,7 @@ import com.nexa.flowops.dto.NodeInfoVO;
 import com.nexa.flowops.dto.NodeRegistryRequest;
 import com.nexa.flowops.entity.NexaNode;
 import com.nexa.flowops.mapper.NexaNodeMapper;
-import com.nexa.flowops.permission.entity.SysUser;
-import com.nexa.flowops.permission.mapper.SysUserMapper;
+import com.nexa.flowops.service.node.NodeAdminGuard;
 import com.nexa.flowops.service.node.NodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +21,8 @@ public class NodeController {
 
     private final NodeService nodeService;
     private final NexaNodeMapper nodeMapper;
-    private final SysUserMapper userMapper;
+    /** 节点管理的授权判定（仅超级管理员）；与 SSH 设置接口共用同一实现 */
+    private final NodeAdminGuard nodeAdminGuard;
 
     // ==================== 在线节点（会话实时状态） ====================
     // 登录校验由 Sa-Token 拦截器统一完成（/api/nodes 未在白名单，未登录 401）；
@@ -47,7 +46,7 @@ public class NodeController {
     /** 查看全部已登记节点 */
     @GetMapping("/registry")
     public Result<List<NexaNodeVO>> listRegistry() {
-        if (!isSuperAdmin()) {
+        if (!nodeAdminGuard.isSuperAdmin()) {
             return Result.fail(403, "仅超级管理员可管理节点登记");
         }
         return Result.ok(nodeMapper.selectList(null).stream().map(this::toVO).toList());
@@ -56,7 +55,7 @@ public class NodeController {
     /** 新增节点登记（runnerId + token 必填） */
     @PostMapping("/registry")
     public Result<Void> createRegistry(@RequestBody NodeRegistryRequest req) {
-        if (!isSuperAdmin()) {
+        if (!nodeAdminGuard.isSuperAdmin()) {
             return Result.fail(403, "仅超级管理员可管理节点登记");
         }
         if (req == null || req.getRunnerId() == null || req.getRunnerId().isBlank()) {
@@ -81,7 +80,7 @@ public class NodeController {
     /** 更新节点登记（nodeName / token 可选，传了才改） */
     @PutMapping("/registry/{runnerId}")
     public Result<Void> updateRegistry(@PathVariable String runnerId, @RequestBody NodeRegistryRequest req) {
-        if (!isSuperAdmin()) {
+        if (!nodeAdminGuard.isSuperAdmin()) {
             return Result.fail(403, "仅超级管理员可管理节点登记");
         }
         NexaNode node = nodeMapper.selectById(runnerId);
@@ -103,7 +102,7 @@ public class NodeController {
     /** 删除节点登记 */
     @DeleteMapping("/registry/{runnerId}")
     public Result<Void> deleteRegistry(@PathVariable String runnerId) {
-        if (!isSuperAdmin()) {
+        if (!nodeAdminGuard.isSuperAdmin()) {
             return Result.fail(403, "仅超级管理员可管理节点登记");
         }
         if (nodeMapper.selectById(runnerId) == null) {
@@ -124,16 +123,5 @@ public class NodeController {
         vo.setCreateTime(node.getCreateTime());
         vo.setHasToken(node.getToken() != null && !node.getToken().isBlank());
         return vo;
-    }
-
-    private boolean isSuperAdmin() {
-        String username;
-        try {
-            username = StpUtil.getLoginIdAsString();
-        } catch (Exception e) {
-            return false;
-        }
-        SysUser user = userMapper.selectByUsername(username);
-        return user != null && user.getIsSuperAdmin() == 1;
     }
 }
