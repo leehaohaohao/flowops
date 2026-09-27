@@ -12,7 +12,7 @@
 | 3 | 进程环境变量 | `docker run -e KEY=value`、`--env-file`、shell `export` | 部署脚本注入层 |
 | 4 | `.env.<profile>`（缺失时降级 `.env`） | `flowops-app/.env.local` | 由 `DotenvPostProcessor` 作为属性源加载 |
 | 5 | `application-<profile>.yml` | `application-prod.yml` | Config Data |
-| 6 | `application.yml` 及代码内默认值 | `${NEXA_MASTER_PORT:8081}` 里的 `8081` | 兜底 |
+| 6 | `application.yml` 及代码内默认值 | `${NEXA_MASTER_PORT:8082}` 里的 `8082` | 兜底 |
 
 解析规则：**每个变量独立**沿该链自上而下查找，命中即止；因此同一次启动里不同变量可以来自不同层。
 例如 `DB_URL` 来自环境变量、`server.port` 来自 `application.yml`、`app.storage.path` 用代码默认值，三者互不影响。
@@ -35,7 +35,7 @@ profile 决定读取哪个 `.env.<profile>` 文件，其解析顺序与上面的
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | 脚本 `-e` | `prod` |
 | `NEXA_MASTER_HOST` | 脚本 `-e` | `0.0.0.0` |
-| `NEXA_MASTER_PORT` | 脚本 `-e` | `8081` |
+| `NEXA_MASTER_PORT` | 脚本 `-e` | `8082` |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` / `JWT_SECRET` | `--env-file .env.<profile>`（同一文件也挂载到 `/app/.env.<profile>`，供应用读取） | 由运维填写 |
 | `server.port` | `application.yml` | `8080`（容器内），宿主机发布为 `PORT`，默认 `8880` |
 
@@ -96,7 +96,7 @@ profile 决定读取哪个 `.env.<profile>` 文件，其解析顺序与上面的
   sa-token.jwt-secret-key                application.yml           .env.local[JWT_SECRET]     ********（敏感，值已隐藏）
   nexa.master.enabled                    application.yml           —                          true
   nexa.master.host                       application.yml           默认值(127.0.0.1)          127.0.0.1
-  nexa.master.port                       application.yml           默认值(8081)               8081
+  nexa.master.port                       application.yml           默认值(8082)               8082
   nexa.master.heartbeat-timeout          application.yml           —                          30s
   docker.host                            application.yml           —                          tcp://localhost:2375
   app.storage.path                       application.yml           —                          /data/flowops/services
@@ -108,7 +108,7 @@ profile 决定读取哪个 `.env.<profile>` 文件，其解析顺序与上面的
 | --- | --- |
 | 键 | 被跟踪的配置项，清单在 `ConfigSourceReporter.WATCHED`，按需增删 |
 | 定义来源 | 该键写在哪个来源（链上第一个命中的属性源）；`无（未在任何来源中定义）` 表示没有任何来源提供它 |
-| 占位符填充来源 | 值形如 `${DB_URL}` 时，真正提供值的来源，如 `.env.local[DB_URL]`、`环境变量(-e/--env-file)[DB_URL]`；`默认值(8081)` 表示走占位符内联默认值；`X 未注入` 表示必填变量缺失 |
+| 占位符填充来源 | 值形如 `${DB_URL}` 时，真正提供值的来源，如 `.env.local[DB_URL]`、`环境变量(-e/--env-file)[DB_URL]`；`默认值(8082)` 表示走占位符内联默认值；`X 未注入` 表示必填变量缺失 |
 | 生效值 | 解析后的最终值；敏感项恒为 `********（敏感，值已隐藏）` |
 
 规则：

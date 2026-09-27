@@ -70,7 +70,7 @@ Deploy script: `deploy-prod.sh <jar> [profile] [env-file]`
 - `./deploy-prod.sh app.jar local .env.local` — local profile, `.env.local`
 - Uses `--env-file` for Docker env vars + `-v` mount of the same file to `/app/<name>` for the app's dotenv loading
 - Container exposes port 8080, mapped to host port 8880 by default (`PORT` 可覆盖)
-- **主从通信**：脚本同时发布 Nexa Protocol Master 端口（容器与宿主机默认均为 8081，与 `application.yml` 一致；
+- **主从通信**：脚本同时发布 Nexa Protocol Master 端口（容器与宿主机默认均为 8082，与 `application.yml` 一致；
   `NEXA_MASTER_PORT` 覆盖容器内监听端口、`NEXA_PORT` 覆盖宿主机发布端口），
   并让容器内监听 `NEXA_MASTER_HOST=0.0.0.0`（shell 变量可覆盖），供其他机器上的子节点连接；
   子节点接入前需放通该端口并用超管录入节点令牌（`POST /api/nodes/registry`）

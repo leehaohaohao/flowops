@@ -11,11 +11,11 @@ set -e
 #  端口：
 #    PORT             控制台 HTTP 宿主机端口，默认 8880 → 容器 8080
 #    NEXA_PORT        主从通信宿主机发布端口，默认同 NEXA_MASTER_PORT
-#    NEXA_MASTER_PORT 容器内监听端口，默认 8081（与 application.yml 一致），映射为 NEXA_PORT:NEXA_MASTER_PORT
+#    NEXA_MASTER_PORT 容器内监听端口，默认 8082（与 application.yml 一致），映射为 NEXA_PORT:NEXA_MASTER_PORT
 #  容器内监听地址由 NEXA_MASTER_HOST 决定，脚本默认 0.0.0.0，
 #  以便其他机器上的子节点连接；实际暴露范围由上面的端口映射与防火墙决定。
 #  注意：这三个键都由本脚本用 -e 注入（优先级高于 env 文件），无需重复写进 env 文件。
-#  示例: PORT=8880 NEXA_PORT=8081 bash deploy-prod.sh app.jar prod .env.prod
+#  示例: PORT=8880 NEXA_PORT=8082 bash deploy-prod.sh app.jar prod .env.prod
 # ==========================================
 
 IMAGE_NAME="flowops"
@@ -23,7 +23,7 @@ CONTAINER_NAME="flowops"
 PORT="${PORT:-8880}"
 # 主节点与子节点通信（Nexa Protocol Master）
 NEXA_MASTER_HOST="${NEXA_MASTER_HOST:-0.0.0.0}"
-NEXA_MASTER_PORT="${NEXA_MASTER_PORT:-8081}"
+NEXA_MASTER_PORT="${NEXA_MASTER_PORT:-8082}"
 NEXA_PORT="${NEXA_PORT:-$NEXA_MASTER_PORT}"
 DATA_DIR="/data/flowops"
 APP_DIR="/app/flowops"

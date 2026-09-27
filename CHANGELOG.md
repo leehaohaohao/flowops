@@ -25,14 +25,17 @@
 
 ### 优化
 
-- **部署开放主从通信端口**：`deploy-prod.sh` 增加 Nexa Protocol Master 端口映射（容器 `8081` → 宿主机 `8081`；
+- **部署开放主从通信端口**：`deploy-prod.sh` 增加 Nexa Protocol Master 端口映射（容器 `8082` → 宿主机 `8082`；
   `NEXA_PORT` 覆盖宿主机发布端口，`NEXA_MASTER_PORT` 覆盖容器内监听端口），并通过 `-e` 在容器内设置
-  `NEXA_MASTER_HOST=0.0.0.0` 以便其他机器上的子节点连接；`Dockerfile` 的 `EXPOSE` 同步为 `8080 8081`，
-  `nexa.master.port` 默认值与脚本对齐为 `8081`，部署成功提示补充放通端口与录入节点令牌的步骤
+  `NEXA_MASTER_HOST=0.0.0.0` 以便其他机器上的子节点连接；`Dockerfile` 的 `EXPOSE` 同步为 `8080 8082`，
+  `nexa.master.port` 默认值与脚本对齐为 `8082`，部署成功提示补充放通端口与录入节点令牌的步骤
 - 新增 `docs/configuration-loading-order.md`：配置来源的权威说明（解析链、逐变量降级、容器内实际来源、启动来源表与验证方法）
 
 ### 修复
 
+- **修复基础镜像已下线导致无法构建**：官方 `openjdk` 镜像已停止维护，`openjdk:17-jdk-slim` 在 Docker Hub 上已无法解析
+  （构建报 `not found`），`Dockerfile` 的 `FROM` 改为 `eclipse-temurin:17-jdk-jammy`，
+  其中安装 Docker CLI 的 apt 源与 docker-ce 仓库同步改走 ubuntu 分支
 - **统一配置加载链**：dotenv 改由唯一的 `DotenvPostProcessor` 作为属性源加载（`addLast`）并自行解析 profile
   （`--spring.profiles.active` → `-Dspring.profiles.active` → `SPRING_PROFILES_ACTIVE` → `prod`）。此前
   `FlowopsApplication.main` 会把 `.env.<profile>` 写成 JVM 系统属性，优先级高于 `-e`，导致挂载的 env 文件反向覆盖
