@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 /**
  * 主节点 Docker 用户自定义 bridge 网络的登记与操作（B2）。
  *
- * <p>规则（见 docs/2026-09-26-node-scoped-docker-network-design-plan.md）：
+ * <p>规则（见 docs/archive/2026-09-26-node-scoped-docker-network-design-plan.md）：
  * <ul>
  *   <li>只操作主节点本机 Docker，且只用 {@code DockerCommandBuilder} 的固定参数命令</li>
  *   <li>只创建使用 Docker 默认地址分配的用户自定义 {@code bridge}；导入时先 inspect 识别既有网络</li>

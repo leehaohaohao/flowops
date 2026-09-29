@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 /**
  * 主节点监听器的注册/断开/鉴权语义测试。
  *
- * <p>对应 docs/2026-09-23-runner-connection-recovery-plan.md 步骤 4 与 D.2：
+ * <p>对应 docs/archive/2026-09-23-runner-connection-recovery-plan.md 步骤 4 与 D.2：
  * <ul>
  *   <li>协议 v0.6.x <b>先认证后接管</b>：拒绝路径不得关闭连接、不得操作会话表、
  *       不得影响同 ID 合法在线会话</li>

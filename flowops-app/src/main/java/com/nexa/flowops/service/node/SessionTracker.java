@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 /**
  * 会话代次与按节点临界区。
  *
- * <p>解决的问题（见 docs/2026-09-23-runner-connection-recovery-plan.md D.2）：
+ * <p>解决的问题（见 docs/archive/2026-09-23-runner-connection-recovery-plan.md D.2）：
  * 协议 v0.6.1/v0.6.2 保证「条件移除当前会话成功才通知断开一次」，但从“旧会话被移除”到“断开回调执行”
  * 之间，同 runnerId 的新连接仍可能完成注册并开始接收任务。若后端只按 runnerId 清理，
  * 旧会话的迟到回调会失败化新会话的任务/查询、并把已恢复的节点标成离线。

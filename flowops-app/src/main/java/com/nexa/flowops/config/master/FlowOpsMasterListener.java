@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
 /**
  * 主节点侧协议事件处理：注册认证（L1）、心跳、断开、任务/查询回执、产物请求，以及会话身份校验（L2）。
  *
- * <p>与协议 v0.6.1 / v0.6.2 的契约（见 docs/2026-09-23-runner-connection-recovery-plan.md 步骤 4）：
+ * <p>与协议 v0.6.1 / v0.6.2 的契约（见 docs/archive/2026-09-23-runner-connection-recovery-plan.md 步骤 4）：
  * <ul>
  *   <li><b>先认证、后接管</b>：{@code onRegister} 回调发生在会话注册之前，失败响应由协议侧
  *       「先 flush 再 CLOSE」送达。因此拒绝路径不得关闭连接、不得操作会话表、不得影响

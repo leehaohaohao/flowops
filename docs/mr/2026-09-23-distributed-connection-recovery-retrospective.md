@@ -1,6 +1,6 @@
 # 主子节点连接恢复与会话一致性复盘
 
-> 复盘对象：`docs/2026-09-23-runner-connection-recovery-plan.md` 中的连接恢复、身份、断开事件及工作归属问题。
+> 复盘对象：`docs/archive/2026-09-23-runner-connection-recovery-plan.md` 中的连接恢复、身份、断开事件及工作归属问题。
 > 涉及仓库：`nexa-protocol`（Java Master / Go Client）、`flowops` 后端、`flowops-executor`；前端属于后续联调验收。
 > 实现基线：协议 v0.6.0（连接/认证）、v0.6.1（发送连接鉴权）、v0.6.2（Java 断开事件所有权）；后端依赖 v0.6.2。
 > 复盘更新：2026-09-24。本文区分代码与单元测试已完成的部分，以及尚无真实四仓联调证据的部分。

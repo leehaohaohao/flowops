@@ -6,15 +6,17 @@ spring:
     active: prod   # 默认生产环境，启动时可用 --spring.profiles.active=dev 切换
   servlet:
     multipart:
-      max-file-size: 500MB
-      max-request-size: 500MB
+      # 发布包上限 1 GiB（docs/frontend-api/node-package-api.md §7）：框架上限故意高于应用上限，
+      # 超限由应用返回统一固定文案，而不是框架的多媒体解析异常
+      max-file-size: 1280MB
+      max-request-size: 1280MB
 
 # 服务端口
 server:
   port: 8080
   tomcat:
     connection-timeout: 300s
-    max-swallow-size: 500MB
+    max-swallow-size: 1280MB
 
 # MyBatis-Plus 配置
 mybatis-plus:

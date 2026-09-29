@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 主节点 Docker 网络管理接口（B3，契约见 docs/2026-09-26-node-scoped-docker-network-design-plan.md 第三节）。
+ * 主节点 Docker 网络管理接口（B3，契约见 docs/archive/2026-09-26-node-scoped-docker-network-design-plan.md 第三节）。
  *
  * <p>鉴权在服务层完成：全局网络管理仅超级管理员；项目视角接口按超管 / 项目主管 / EDIT_CONFIG 判定。
  * 本期网络仅属主节点，接口不涉及 runner 或跨节点通信。
